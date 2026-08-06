@@ -2,20 +2,36 @@
   "name": "lesnormes",
   "version": "1.0.0",
   "description": "\"HR app REST API\"",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:format": "prisma format",
+    "prisma:status": "prisma migrate status",
+    "prisma:push": "prisma db push",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:reset": "prisma migrate reset --force",
+    "prisma:seed": "node prisma/seed.js",
+    "prisma:studio": "prisma studio",
+    "test": "echo \"No automated tests configured yet\""
   },
   "author": "Neosys",
   "license": "ISC",
   "dependencies": {
+    "@prisma/client": "^6.6.0",
     "body-parser": "^2.2.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
     "nodemon": "^3.1.14",
+    "openai": "^6.38.0",
+    "prisma": "^6.6.0",
     "xlsx": "^0.18.5"
   }
 }
