@@ -11,6 +11,7 @@ const {
 const prisma = require('../lib/prisma');
 const AppError = require('../utils/app-error');
 const { buildPagination, parsePagination } = require('../utils/pagination');
+const { ensureEmployeeFolder } = require('../utils/employee-folders');
 
 const DEPARTMENT_PRESETS = {
   rh: { code: 'rh', name: 'Ressources humaines' },
@@ -95,6 +96,12 @@ const employeeInclude = {
     },
   },
   payrollProfile: true,
+  _count: {
+    select: {
+      documents: true,
+      employmentEvents: true,
+    },
+  },
 };
 
 function normalizeText(value) {
@@ -215,6 +222,7 @@ function serializeEmployee(employee) {
           paymentMethod: employee.payrollProfile.paymentMethod,
         }
       : null,
+    documentCount: employee._count?.documents || 0,
     ui: {
       statusLabel: statusMeta.label,
       statusTone: statusMeta.tone,
@@ -504,6 +512,8 @@ async function createEmployee(payload, context) {
     });
   });
 
+  ensureEmployeeFolder(employee.department?.code, employee.employeeNumber);
+
   return serializeEmployee(employee);
 }
 
@@ -536,6 +546,8 @@ async function updateEmployee(employeeId, payload, context) {
       include: employeeInclude,
     });
   });
+
+  ensureEmployeeFolder(employee.department?.code, employee.employeeNumber);
 
   return serializeEmployee(employee);
 }

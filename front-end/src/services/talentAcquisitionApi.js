@@ -96,6 +96,11 @@ export async function updateCandidate(candidateId, body) {
   return payload.data;
 }
 
+export async function deleteCandidate(candidateId) {
+  const payload = await apiRequest(`/api/talent-acquisition/candidates/${candidateId}`, { method: 'DELETE' });
+  return payload.data;
+}
+
 export async function listApplications(params = {}) {
   return listCollection('/api/talent-acquisition/applications', params);
 }

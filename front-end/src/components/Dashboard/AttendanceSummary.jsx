@@ -1,13 +1,13 @@
 import React from 'react';
 import SummaryStatCard from './SummaryStatCard';
 
-const AttendanceSummary = () => {
+const AttendanceSummary = ({ data = {} }) => {
   return (
     <SummaryStatCard
       title="Taux de presence"
-      value="92%"
+      value={`${data.rate ?? 0}%`}
       unitLabel="Cette semaine"
-      trend="+3% par rapport a la semaine precedente"
+      trend={data.trend || 'Aucune presence enregistree'}
       to="/TimeAttendance"
     />
   );

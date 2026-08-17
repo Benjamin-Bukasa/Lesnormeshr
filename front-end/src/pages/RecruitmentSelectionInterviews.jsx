@@ -8,11 +8,13 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Users2,
 } from 'lucide-react';
 import {
   Button,
   Card,
+  ConfirmModal,
   DataTable,
   DropdownSelect,
   Input,
@@ -27,6 +29,7 @@ import {
   createAtsApplicationIntake,
   createCandidate,
   createOffer,
+  deleteCandidate,
   getAtsScreeningDetail,
   getCandidateResumeProfile,
   listApplications,
@@ -457,6 +460,8 @@ function RecruitmentSelectionInterviews() {
   const [saving, setSaving] = useState(false);
   const [atsDetailLoading, setAtsDetailLoading] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [candidateDeleteTarget, setCandidateDeleteTarget] = useState(null);
+  const [deletingCandidate, setDeletingCandidate] = useState(false);
   const [applications, setApplications] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [offers, setOffers] = useState([]);
@@ -682,6 +687,22 @@ function RecruitmentSelectionInterviews() {
       toast.error(error.message || 'Impossible d enregistrer le candidat.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteCandidate = async () => {
+    if (!candidateDeleteTarget) return;
+
+    try {
+      setDeletingCandidate(true);
+      await deleteCandidate(candidateDeleteTarget.id);
+      await refreshAll();
+      toast.success('Candidat supprime.');
+      setCandidateDeleteTarget(null);
+    } catch (error) {
+      toast.error(error.message || 'Impossible de supprimer le candidat.');
+    } finally {
+      setDeletingCandidate(false);
     }
   };
 
@@ -1161,7 +1182,10 @@ function RecruitmentSelectionInterviews() {
             <DropdownAction
               label={<EllipsisVertical size={18} strokeWidth={1.5} />}
               buttonClassName="rounded-lg bg-transparent p-1 text-text-primary hover:bg-secondary/70"
-              items={[{ id: `edit-${row.id}`, label: 'Modifier', onClick: () => openEditSheet('candidate', row) }]}
+              items={[
+                { id: `edit-${row.id}`, label: 'Modifier', onClick: () => openEditSheet('candidate', row) },
+                { id: `delete-${row.id}`, label: 'Supprimer', icon: Trash2, variant: 'danger', onClick: () => setCandidateDeleteTarget(row) },
+              ]}
             />
           )}
         />
@@ -1324,6 +1348,13 @@ function RecruitmentSelectionInterviews() {
     if (activeTab === 'ats') {
       const shortlistCount = atsRows.filter((row) => row.recommendation === 'Shortlist prioritaire').length;
       const reviewCount = atsRows.filter((row) => row.recommendation === 'Revue humaine requise').length;
+      const interviewReadyCount = atsRows.filter((row) => ['Shortlist prioritaire', 'Entretien recommandé'].includes(row.recommendation)).length;
+      const cvToParseCount = atsRows.filter((row) => row.cvStatus === 'CV à analyser').length;
+      const screenedCount = atsRows.filter((row) => screeningsByApplicationId.has(row.id)).length;
+      const confidenceRows = atsRows.filter((row) => Number(row.confidenceScore || 0) > 0);
+      const avgConfidence = confidenceRows.length
+        ? Math.round(confidenceRows.reduce((sum, row) => sum + Number(row.confidenceScore || 0), 0) / confidenceRows.length)
+        : 0;
       const avgFinalScore = atsRows.length
         ? Math.round(atsRows.reduce((sum, row) => sum + Number(row.finalScore || 0), 0) / atsRows.length)
         : 0;
@@ -1378,6 +1409,30 @@ function RecruitmentSelectionInterviews() {
               <div className="rounded-xl border border-border bg-background/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-muted">Étape 6 et 7</p>
                 <p className="mt-2 text-sm text-text">Le recruteur garde la main et renvoie son feedback pour enrichir les prochains classements.</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card
+            title="Lecture rapide du pipeline ATS"
+            subtitle="Ce résumé permet de prioriser les CV à parser, les dossiers à relire et les candidats déjà prêts pour l’étape suivante."
+          >
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-border bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted">Dossiers scorés</p>
+                <p className="mt-2 text-2xl font-semibold text-text">{screenedCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted">CV à parser</p>
+                <p className="mt-2 text-2xl font-semibold text-text">{cvToParseCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted">Prêts pour entretien</p>
+                <p className="mt-2 text-2xl font-semibold text-text">{interviewReadyCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted">Confiance moyenne</p>
+                <p className="mt-2 text-2xl font-semibold text-text">{avgConfidence || '-'}</p>
               </div>
             </div>
           </Card>
@@ -1958,6 +2013,18 @@ function RecruitmentSelectionInterviews() {
           </div>
         </form>
       </Sheet>
+
+      <ConfirmModal
+        open={Boolean(candidateDeleteTarget)}
+        onClose={() => setCandidateDeleteTarget(null)}
+        onConfirm={handleDeleteCandidate}
+        title="Supprimer le candidat"
+        description={candidateDeleteTarget
+          ? `Voulez-vous vraiment supprimer ${candidateDeleteTarget.firstName} ${candidateDeleteTarget.lastName} ? Ses candidatures et donnees ATS associees seront egalement supprimees.`
+          : ''}
+        confirmLabel="Supprimer"
+        loading={deletingCandidate}
+      />
     </div>
   );
 }

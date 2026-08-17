@@ -49,11 +49,14 @@ function mapEmployeeToRow(employee) {
     firstName: employee.firstName,
     lastName: employee.lastName,
     email: employee.workEmail || '',
+    departmentId: employee.department?.id || '',
     department: employee.department?.name || '',
+    departmentCode: employee.department?.code || '',
     position: employee.position?.title || '',
     joinDate: toDateInput(employee.hireDate),
     status: statusMeta.label,
     statusTone: statusMeta.tone,
+    documentCount: employee.documentCount || 0,
     raw: employee,
   };
 }
@@ -170,6 +173,76 @@ export async function updateEmployeeStatus(employeeId, status) {
 
 export async function deleteEmployee(employeeId) {
   await apiRequest(`/api/employees/${employeeId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listEmployeeDocuments(params = {}) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '' || value === 'all') {
+      return;
+    }
+
+    query.set(key, String(value));
+  });
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const payload = await apiRequest(`/api/employees/documents${suffix}`);
+
+  return {
+    items: payload.data || [],
+    pagination: payload.pagination || null,
+  };
+}
+
+export async function listEmployeeFolderDocuments(employeeId, params = {}) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '' || value === 'all') {
+      return;
+    }
+
+    query.set(key, String(value));
+  });
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const payload = await apiRequest(`/api/employees/${employeeId}/documents${suffix}`);
+
+  return {
+    items: payload.data || [],
+    pagination: payload.pagination || null,
+  };
+}
+
+export async function uploadEmployeeDocument(employeeId, formData) {
+  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/documents`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.message || 'Erreur API');
+  }
+
+  return payload.data;
+}
+
+export async function verifyEmployeeDocument(documentId) {
+  const payload = await apiRequest(`/api/employees/documents/${documentId}/verify`, {
+    method: 'PATCH',
+  });
+
+  return payload.data;
+}
+
+export async function deleteEmployeeDocument(documentId) {
+  return apiRequest(`/api/employees/documents/${documentId}`, {
     method: 'DELETE',
   });
 }

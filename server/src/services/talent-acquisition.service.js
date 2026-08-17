@@ -589,6 +589,26 @@ async function updateCandidate(candidateId, payload, tenantId) {
   return updatedCandidate;
 }
 
+async function deleteCandidate(candidateId, tenantId) {
+  const existingCandidate = await prisma.candidate.findFirst({
+    where: {
+      id: candidateId,
+      tenantId,
+    },
+    select: { id: true },
+  });
+
+  if (!existingCandidate) {
+    throw new AppError(404, 'Candidat introuvable.');
+  }
+
+  await prisma.candidate.delete({
+    where: { id: candidateId },
+  });
+
+  return { id: candidateId };
+}
+
 async function createApplication(payload, tenantId) {
   if (!payload.jobPostingId || !payload.candidateId) {
     throw new AppError(400, 'jobPostingId et candidateId sont obligatoires.');
@@ -1469,6 +1489,7 @@ module.exports = {
   addOnboardingTask,
   createApplication,
   createCandidate,
+  deleteCandidate,
   createJobPosting,
   createOffer,
   createOnboardingPlan,

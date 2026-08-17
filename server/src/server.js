@@ -11,6 +11,8 @@ const adminRoutes = require('./routes/admin.routes');
 const employeeRoutes = require('./routes/employee.routes');
 const performanceRoutes = require('./routes/performance.routes');
 const talentAcquisitionRoutes = require('./routes/talent-acquisition.routes');
+const workspaceRoutes = require('./routes/workspace.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -37,6 +39,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/performance', performanceRoutes);
 app.use('/api/talent-acquisition', talentAcquisitionRoutes);
+app.use('/api/workspace', workspaceRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

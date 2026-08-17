@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { KeyRound, Mail, ShieldCheck, UserPlus, UserRound } from 'lucide-react';
-import { Button, Card, DataTable, DropdownSelect, Input, StatusBadge, useToast } from '../components/ui';
+import { EllipsisVertical, KeyRound, Mail, ShieldCheck, UserCheck, UserPlus, UserRound, UserX } from 'lucide-react';
+import { Button, Card, DataTable, DropdownSelect, Input, Sheet, StatusBadge, useToast } from '../components/ui';
+import DropdownAction from '../components/ui/dropdownAction';
 import useAuthStore from '../stores/authStore';
 import {
   createAdminUser,
@@ -9,6 +10,35 @@ import {
   updateAdminUserAccess,
   updateAdminUserStatus,
 } from '../services/adminApi';
+
+const ADMIN_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+async function requestAdminJson(path, { method = 'GET', body } = {}) {
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.message || 'Erreur API');
+  }
+
+  return payload;
+}
+
+async function loadAccessOptions() {
+  if (typeof getAccessOptions === 'function') {
+    return getAccessOptions();
+  }
+
+  return requestAdminJson('/api/admin/access/options');
+}
 
 const PAGE_SIZE = 10;
 
@@ -37,22 +67,24 @@ function CheckboxGroup({ options, values, onToggle, emptyMessage }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {options.map((option) => {
-        const checked = values.includes(option.code);
+        const accessCode = option.code || option.key || option.value || '';
+        const checked = values.includes(accessCode);
+        const description = option.description || option.details || '';
 
         return (
           <label
-            key={option.code}
+            key={accessCode || option.id || option.name}
             className="flex items-start gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm text-text transition hover:border-primary/40"
           >
             <input
               type="checkbox"
               checked={checked}
-              onChange={() => onToggle(option.code)}
+              onChange={() => onToggle(accessCode)}
               className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
             />
             <span className="min-w-0">
-              <span className="block font-medium">{option.name}</span>
-              <span className="block text-xs text-muted">{option.code}</span>
+              {option.name ? <span className="block font-medium">{option.name}</span> : null}
+              {description ? <span className="mt-1 block text-xs text-text-secondary">{description}</span> : null}
             </span>
           </label>
         );
@@ -110,6 +142,8 @@ function SettingsUsersPermissions() {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [createForm, setCreateForm] = useState(INITIAL_CREATE_FORM);
   const [accessForm, setAccessForm] = useState(INITIAL_ACCESS_FORM);
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
+  const [isAccessSheetOpen, setIsAccessSheetOpen] = useState(false);
 
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId) || null,
@@ -129,7 +163,7 @@ function SettingsUsersPermissions() {
 
     async function loadOptions() {
       try {
-        const data = await getAccessOptions();
+        const data = await loadAccessOptions();
         if (cancelled) return;
 
         setAccessOptions({
@@ -261,6 +295,21 @@ function SettingsUsersPermissions() {
     }));
   }
 
+  function openCreateSheet() {
+    setCreateForm({
+      ...INITIAL_CREATE_FORM,
+      roleCode: accessOptions.roles?.[0]?.code || '',
+    });
+    setIsCreateSheetOpen(true);
+  }
+
+  function openAccessSheet(userId = selectedUserId) {
+    if (userId) {
+      setSelectedUserId(userId);
+    }
+    setIsAccessSheetOpen(true);
+  }
+
   async function refreshUsers(targetPage = page) {
     const data = await listAdminUsers({ page: targetPage, limit: PAGE_SIZE });
     setUsers(data.users || []);
@@ -286,6 +335,7 @@ function SettingsUsersPermissions() {
         ...INITIAL_CREATE_FORM,
         roleCode: accessOptions.roles?.[0]?.code || '',
       });
+      setIsCreateSheetOpen(false);
 
       setPage(1);
       const nextUsers = await refreshUsers(1);
@@ -315,6 +365,7 @@ function SettingsUsersPermissions() {
       toast.success(result.message || 'Acces utilisateur mis a jour.');
       await refreshUsers(page);
       setSelectedUserId(selectedUser.id);
+      setIsAccessSheetOpen(false);
     } catch (error) {
       toast.error(error.message || 'Mise a jour des acces impossible.');
     } finally {
@@ -339,6 +390,22 @@ function SettingsUsersPermissions() {
       <Card
         title="Utilisateurs et permissions"
         subtitle="Creez des comptes, attribuez un role, des permissions directes et les modules accessibles selon votre tenant."
+        action={(
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={openCreateSheet}>
+              <UserPlus size={16} />
+              Créer un utilisateur
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => openAccessSheet()}
+              disabled={!selectedUser}
+            >
+              <ShieldCheck size={16} />
+              Modifier les accès
+            </Button>
+          </div>
+        )}
       >
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-border bg-background p-4">
@@ -368,22 +435,25 @@ function SettingsUsersPermissions() {
             data={userRows}
             emptyMessage={isLoading ? 'Chargement des utilisateurs...' : 'Aucun utilisateur disponible.'}
             renderActions={(row) => (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={selectedUserId === row.id ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => setSelectedUserId(row.id)}
-                >
-                  Gérer
-                </Button>
-                <Button
-                  variant={row.status === 'SUSPENDED' ? 'secondary' : 'danger'}
-                  size="sm"
-                  onClick={() => handleToggleStatus(row)}
-                >
-                  {row.status === 'SUSPENDED' ? 'Réactiver' : 'Suspendre'}
-                </Button>
-              </div>
+              <DropdownAction
+                label={<EllipsisVertical size={18} strokeWidth={1.5} />}
+                buttonClassName="rounded-lg bg-transparent p-1 text-text-primary hover:bg-secondary/70"
+                items={[
+                  {
+                    id: `access_${row.id}`,
+                    label: 'Gerer les acces',
+                    icon: ShieldCheck,
+                    onClick: () => openAccessSheet(row.id),
+                  },
+                  {
+                    id: `status_${row.id}`,
+                    label: row.status === 'SUSPENDED' ? 'Reactiver' : 'Suspendre',
+                    icon: row.status === 'SUSPENDED' ? UserCheck : UserX,
+                    variant: row.status === 'SUSPENDED' ? undefined : 'danger',
+                    onClick: () => handleToggleStatus(row),
+                  },
+                ]}
+              />
             )}
             pagination={{
               page: pagination?.page || page,
@@ -400,175 +470,235 @@ function SettingsUsersPermissions() {
           />
         </Card>
 
-        <div className="space-y-4">
-          <Card
-            title="Créer un utilisateur"
-            subtitle="Le backend génère un mot de passe temporaire et envoie les identifiants via le canal choisi."
-          >
-            <form className="space-y-4" onSubmit={handleCreateUser}>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Input
-                  id="user-first-name"
-                  name="firstName"
-                  label="Prenom"
-                  value={createForm.firstName}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, firstName: event.target.value }))}
-                  placeholder="Ex: Alice"
-                  required
-                  leftIcon={UserRound}
-                />
-                <Input
-                  id="user-last-name"
-                  name="lastName"
-                  label="Nom"
-                  value={createForm.lastName}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, lastName: event.target.value }))}
-                  placeholder="Ex: Kasongo"
-                  required
-                  leftIcon={UserRound}
-                />
-                <Input
-                  id="user-email"
-                  name="email"
-                  label="Email"
-                  type="email"
-                  value={createForm.email}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))}
-                  placeholder="alice@entreprise.com"
-                  leftIcon={Mail}
-                />
-                <Input
-                  id="user-phone"
-                  name="phone"
-                  label="Telephone"
-                  value={createForm.phone}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, phone: event.target.value }))}
-                  placeholder="+243..."
-                />
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <DropdownSelect
-                  id="create-role"
-                  label="Role"
-                  value={createForm.roleCode}
-                  onChange={(nextValue) => setCreateForm((prev) => ({ ...prev, roleCode: nextValue }))}
-                  options={accessOptions.roles.map((role) => ({
-                    value: role.code,
-                    label: role.name,
-                  }))}
-                />
-
-                <DropdownSelect
-                  id="create-channel"
-                  label="Canal prefere"
-                  value={createForm.preferredChannel}
-                  onChange={(nextValue) => setCreateForm((prev) => ({ ...prev, preferredChannel: nextValue }))}
-                  options={[
-                    { value: 'EMAIL', label: 'Email' },
-                    { value: 'SMS', label: 'SMS' },
-                  ]}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-primary" />
-                  <h4 className="text-sm font-semibold text-text">Permissions directes</h4>
-                </div>
-                <CheckboxGroup
-                  options={accessOptions.permissions}
-                  values={createForm.permissionCodes}
-                  onToggle={(code) => toggleFormCode('permissionCodes', code)}
-                  emptyMessage="Aucune permission disponible."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <KeyRound size={16} className="text-primary" />
-                  <h4 className="text-sm font-semibold text-text">Modules accessibles</h4>
-                </div>
-                <CheckboxGroup
-                  options={accessOptions.modules}
-                  values={createForm.moduleCodes}
-                  onToggle={(code) => toggleFormCode('moduleCodes', code)}
-                  emptyMessage="Aucun module disponible."
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmittingCreate}>
-                  <UserPlus size={16} />
-                  {isSubmittingCreate ? 'Création...' : 'Créer l’utilisateur'}
-                </Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card
-            title="Autorisations utilisateur"
-            subtitle={selectedUser
-              ? `Modifiez les acces de ${selectedUser.firstName} ${selectedUser.lastName}.`
-              : 'Selectionnez un utilisateur dans la liste pour modifier ses acces.'}
-          >
-            {selectedUser ? (
-              <form className="space-y-4" onSubmit={handleSaveAccess}>
-                <div className="rounded-xl border border-border bg-background p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-text">
-                        {selectedUser.firstName} {selectedUser.lastName}
-                      </p>
-                      <p className="text-sm text-muted">{selectedUser.email || selectedUser.phone || '-'}</p>
-                    </div>
-                    <StatusBadge status={selectedUser.status} label={getStatusLabel(selectedUser.status)} />
+        <Card
+          title="Aperçu de l’utilisateur"
+          subtitle={selectedUser
+            ? `Prévisualisation de ${selectedUser.firstName} ${selectedUser.lastName}.`
+            : 'Selectionnez un utilisateur dans la liste pour l’aperçu.'}
+          action={(
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openAccessSheet()}
+              disabled={!selectedUser}
+            >
+              Ouvrir le sheet
+            </Button>
+          )}
+        >
+          {selectedUser ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-background p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold text-text">
+                      {selectedUser.firstName} {selectedUser.lastName}
+                    </p>
+                    <p className="text-sm text-muted">{selectedUser.email || selectedUser.phone || '-'}</p>
                   </div>
+                  <StatusBadge status={selectedUser.status} label={getStatusLabel(selectedUser.status)} />
                 </div>
-
-                <DropdownSelect
-                  id="selected-role"
-                  label="Role attribué"
-                  value={accessForm.roleCode}
-                  onChange={(nextValue) => setAccessForm((prev) => ({ ...prev, roleCode: nextValue }))}
-                  options={accessOptions.roles.map((role) => ({
-                    value: role.code,
-                    label: role.name,
-                  }))}
-                />
-
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-text">Permissions</h4>
-                  <CheckboxGroup
-                    options={accessOptions.permissions}
-                    values={accessForm.permissionCodes}
-                    onToggle={(code) => toggleAccessCode('permissionCodes', code)}
-                    emptyMessage="Aucune permission disponible."
-                  />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted">Role</p>
+                  <p className="mt-2 text-sm font-medium text-text">{selectedUser.access?.role?.name || selectedUser.access?.role?.code || '-'}</p>
                 </div>
-
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-text">Modules</h4>
-                  <CheckboxGroup
-                    options={accessOptions.modules}
-                    values={accessForm.moduleCodes}
-                    onToggle={(code) => toggleAccessCode('moduleCodes', code)}
-                    emptyMessage="Aucun module disponible."
-                  />
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted">Permissions</p>
+                  <p className="mt-2 text-sm font-medium text-text">{selectedUser.access?.permissions?.length || 0} autorisation(s)</p>
                 </div>
-
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isSubmittingAccess}>
-                    {isSubmittingAccess ? 'Enregistrement...' : 'Enregistrer les accès'}
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <p className="text-sm text-muted">Aucun utilisateur sélectionné.</p>
-            )}
-          </Card>
-        </div>
+              </div>
+              <p className="text-sm text-muted">
+                Le formulaire d’édition se trouve maintenant dans un sheet pour garder la liste plus lisible.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">Aucun utilisateur sélectionné.</p>
+          )}
+        </Card>
       </div>
+
+      <Sheet
+        open={isCreateSheetOpen}
+        onClose={() => setIsCreateSheetOpen(false)}
+        title="Créer un utilisateur"
+        description="Le backend génère un mot de passe temporaire et envoie les identifiants via le canal choisi."
+        size="lg"
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIsCreateSheetOpen(false)} disabled={isSubmittingCreate}>
+              Annuler
+            </Button>
+            <Button type="submit" form="create-user-form" disabled={isSubmittingCreate}>
+              <UserPlus size={16} />
+              {isSubmittingCreate ? 'Création...' : 'Créer l’utilisateur'}
+            </Button>
+          </div>
+        )}
+      >
+        <form id="create-user-form" className="space-y-4" onSubmit={handleCreateUser}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input
+              id="user-first-name"
+              name="firstName"
+              label="Prenom"
+              value={createForm.firstName}
+              onChange={(event) => setCreateForm((prev) => ({ ...prev, firstName: event.target.value }))}
+              placeholder="Ex: Alice"
+              required
+              leftIcon={UserRound}
+            />
+            <Input
+              id="user-last-name"
+              name="lastName"
+              label="Nom"
+              value={createForm.lastName}
+              onChange={(event) => setCreateForm((prev) => ({ ...prev, lastName: event.target.value }))}
+              placeholder="Ex: Kasongo"
+              required
+              leftIcon={UserRound}
+            />
+            <Input
+              id="user-email"
+              name="email"
+              label="Email"
+              type="email"
+              value={createForm.email}
+              onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))}
+              placeholder="alice@entreprise.com"
+              leftIcon={Mail}
+            />
+            <Input
+              id="user-phone"
+              name="phone"
+              label="Telephone"
+              value={createForm.phone}
+              onChange={(event) => setCreateForm((prev) => ({ ...prev, phone: event.target.value }))}
+              placeholder="+243..."
+            />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <DropdownSelect
+              id="create-role"
+              label="Role"
+              value={createForm.roleCode}
+              onChange={(nextValue) => setCreateForm((prev) => ({ ...prev, roleCode: nextValue }))}
+              options={accessOptions.roles.map((role) => ({
+                value: role.code,
+                label: role.name,
+              }))}
+            />
+
+            <DropdownSelect
+              id="create-channel"
+              label="Canal prefere"
+              value={createForm.preferredChannel}
+              onChange={(nextValue) => setCreateForm((prev) => ({ ...prev, preferredChannel: nextValue }))}
+              options={[
+                { value: 'EMAIL', label: 'Email' },
+                { value: 'SMS', label: 'SMS' },
+              ]}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={16} className="text-primary" />
+              <h4 className="text-sm font-semibold text-text">Permissions directes</h4>
+            </div>
+            <CheckboxGroup
+              options={accessOptions.permissions}
+              values={createForm.permissionCodes}
+              onToggle={(code) => toggleFormCode('permissionCodes', code)}
+              emptyMessage="Aucune permission disponible."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <KeyRound size={16} className="text-primary" />
+              <h4 className="text-sm font-semibold text-text">Modules accessibles</h4>
+            </div>
+            <CheckboxGroup
+              options={accessOptions.modules}
+              values={createForm.moduleCodes}
+              onToggle={(code) => toggleFormCode('moduleCodes', code)}
+              emptyMessage="Aucun module disponible."
+            />
+          </div>
+        </form>
+      </Sheet>
+
+      <Sheet
+        open={isAccessSheetOpen}
+        onClose={() => setIsAccessSheetOpen(false)}
+        title="Modifier les accès"
+        description={selectedUser
+          ? `Ajustez les permissions de ${selectedUser.firstName} ${selectedUser.lastName}.`
+          : 'Sélectionnez un utilisateur pour continuer.'}
+        size="lg"
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIsAccessSheetOpen(false)} disabled={isSubmittingAccess}>
+              Annuler
+            </Button>
+            <Button type="submit" form="access-user-form" disabled={isSubmittingAccess || !selectedUser}>
+              {isSubmittingAccess ? 'Enregistrement...' : 'Enregistrer les accès'}
+            </Button>
+          </div>
+        )}
+      >
+        {selectedUser ? (
+          <form id="access-user-form" className="space-y-4" onSubmit={handleSaveAccess}>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-text">
+                    {selectedUser.firstName} {selectedUser.lastName}
+                  </p>
+                  <p className="text-sm text-muted">{selectedUser.email || selectedUser.phone || '-'}</p>
+                </div>
+                <StatusBadge status={selectedUser.status} label={getStatusLabel(selectedUser.status)} />
+              </div>
+            </div>
+
+            <DropdownSelect
+              id="selected-role"
+              label="Role attribué"
+              value={accessForm.roleCode}
+              onChange={(nextValue) => setAccessForm((prev) => ({ ...prev, roleCode: nextValue }))}
+              options={accessOptions.roles.map((role) => ({
+                value: role.code,
+                label: role.name,
+              }))}
+            />
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-text">Permissions</h4>
+              <CheckboxGroup
+                options={accessOptions.permissions}
+                values={accessForm.permissionCodes}
+                onToggle={(code) => toggleAccessCode('permissionCodes', code)}
+                emptyMessage="Aucune permission disponible."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-text">Modules</h4>
+              <CheckboxGroup
+                options={accessOptions.modules}
+                values={accessForm.moduleCodes}
+                onToggle={(code) => toggleAccessCode('moduleCodes', code)}
+                emptyMessage="Aucun module disponible."
+              />
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-muted">Aucun utilisateur sélectionné.</p>
+        )}
+      </Sheet>
     </div>
   );
 }

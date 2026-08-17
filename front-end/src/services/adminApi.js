@@ -19,6 +19,21 @@ async function apiRequest(path, { method = 'GET', body } = {}) {
   return payload;
 }
 
+function buildQuery(params = {}) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '' || value === 'all') {
+      return;
+    }
+
+    query.set(key, String(value));
+  });
+
+  const suffix = query.toString();
+  return suffix ? `?${suffix}` : '';
+}
+
 export async function getAccessOptions() {
   return apiRequest('/api/admin/access/options');
 }
@@ -56,5 +71,36 @@ export async function updateAdminUserStatus(userId, body) {
   return apiRequest(`/api/admin/users/${userId}/status`, {
     method: 'PATCH',
     body,
+  });
+}
+
+export async function listDepartments(params = {}) {
+  const payload = await apiRequest(`/api/admin/departments${buildQuery(params)}`);
+  return {
+    departments: payload.departments || [],
+  };
+}
+
+export async function createDepartment(body) {
+  const payload = await apiRequest('/api/admin/departments', {
+    method: 'POST',
+    body,
+  });
+
+  return payload.department;
+}
+
+export async function updateDepartment(departmentId, body) {
+  const payload = await apiRequest(`/api/admin/departments/${departmentId}`, {
+    method: 'PATCH',
+    body,
+  });
+
+  return payload.department;
+}
+
+export async function deleteDepartment(departmentId) {
+  return apiRequest(`/api/admin/departments/${departmentId}`, {
+    method: 'DELETE',
   });
 }

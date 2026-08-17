@@ -1,13 +1,13 @@
 import React from 'react';
 import SummaryStatCard from './SummaryStatCard';
 
-const EmployeeSummary = () => {
+const EmployeeSummary = ({ data = {} }) => {
   return (
     <SummaryStatCard
       title="Total employes"
-      value="150"
-      unitLabel="Employés"
-      trend="10% d'augmentation ce mois"
+      value={data.total ?? 0}
+      unitLabel="Employes"
+      trend={data.trend || 'Aucune evolution enregistree'}
       to="/Employees/Liste-Employes"
     />
   );

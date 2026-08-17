@@ -2,13 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { EllipsisVertical, Star } from 'lucide-react';
 import { Button } from '../ui';
 
-const SATISFACTION_BREAKDOWN = [
-  { id: 'c1', title: 'Remuneration et avantages', percent: 78, score: 4.5 },
-  { id: 'c2', title: 'Culture de travail', percent: 74, score: 4.3 },
-  { id: 'c3', title: 'Equilibre vie pro/perso', percent: 71, score: 4.1 },
-  { id: 'c4', title: "Opportunites d'evolution", percent: 68, score: 3.9 },
-];
-
 const Gauge = ({ value }) => {
   const clamped = Math.max(0, Math.min(100, value));
   const cx = 90;
@@ -26,7 +19,6 @@ const Gauge = ({ value }) => {
           <stop offset="100%" stopColor="hsl(var(--color-primary) / 0.35)" />
         </linearGradient>
       </defs>
-
       <path
         d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none"
@@ -44,7 +36,6 @@ const Gauge = ({ value }) => {
         strokeDasharray={`${clamped} 100`}
         style={{ transition: 'stroke-dasharray 900ms ease' }}
       />
-
       <line
         x1={cx}
         y1={cy}
@@ -82,46 +73,47 @@ const RatingStars = ({ score }) => {
   );
 };
 
-const EmployeeSatisfaction = () => {
+const EmployeeSatisfaction = ({ data = {} }) => {
   const [gaugeValue, setGaugeValue] = useState(0);
+  const breakdown = data.breakdown || [];
 
   useEffect(() => {
-    const timer = setTimeout(() => setGaugeValue(73), 30);
+    const timer = setTimeout(() => setGaugeValue(Number(data.percent || 0)), 30);
     return () => clearTimeout(timer);
-  }, []);
+  }, [data.percent]);
 
   return (
     <section className="rounded-xl border border-border bg-surface p-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-text-primary">Satisfaction des employes</h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 rounded-full p-0"
-          aria-label="Plus d'options"
-        >
+        <Button variant="ghost" size="sm" className="h-7 w-7 rounded-full p-0" aria-label="Plus d'options">
           <EllipsisVertical size={14} />
         </Button>
       </div>
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="space-y-0.5">
-          <p className="text-3xl font-semibold leading-none text-text-primary">73%</p>
-          <p className="text-sm text-text-secondary">Employés satisfaits</p>
+          <p className="text-3xl font-semibold leading-none text-text-primary">{data.percent ?? 0}%</p>
+          <p className="text-sm text-text-secondary">Employes ayant repondu</p>
           <div className="mt-1 flex items-center gap-1.5">
-            <RatingStars score={4.2} />
-            <span className="text-sm font-semibold text-text-primary">4.2/5</span>
+            <RatingStars score={Number(data.score || 0)} />
+            <span className="text-sm font-semibold text-text-primary">{Number(data.score || 0).toFixed(1)}/5</span>
           </div>
         </div>
         <Gauge value={gaugeValue} />
       </div>
 
       <p className="mt-1.5 rounded-md bg-secondary px-2 py-1 text-[13px] text-text-secondary">
-        Soit une <span className="font-semibold text-primary">hausse de 6%</span> par rapport au mois dernier
+        {data.responseCount
+          ? `${data.responseCount} evaluation${data.responseCount === 1 ? '' : 's'} notee${data.responseCount === 1 ? '' : 's'}`
+          : 'Aucune evaluation notee en base.'}
+        {data.trend ? <span className="font-semibold text-primary">{` (${data.trend})`}</span> : null}
       </p>
 
       <div className="mt-3 space-y-2.5">
-        {SATISFACTION_BREAKDOWN.map((item, index) => (
+        {breakdown.length === 0 ? (
+          <p className="text-sm text-text-secondary">Les retours notes apparaitront ici.</p>
+        ) : breakdown.map((item, index) => (
           <article
             key={item.id}
             className="space-y-0.5"
@@ -135,8 +127,8 @@ const EmployeeSatisfaction = () => {
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-text-primary">{item.title}</h4>
               <div className="inline-flex items-center gap-1">
-                <RatingStars score={item.score} />
-                <span className="text-sm font-semibold text-text-primary">{item.score.toFixed(1)}/5</span>
+                <RatingStars score={Number(item.score || 0)} />
+                <span className="text-sm font-semibold text-text-primary">{Number(item.score || 0).toFixed(1)}/5</span>
               </div>
             </div>
             <p className="text-[13px] text-text-secondary">{item.percent}% de satisfaction</p>

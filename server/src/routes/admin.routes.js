@@ -5,8 +5,12 @@ const { ensurePasswordChanged, requireAuth } = require('../middleware/auth.middl
 const { requirePermissions, requireRoles } = require('../middleware/rbac.middleware');
 const {
   accessOptionsController,
+  createDepartmentController,
   createUserController,
+  deleteDepartmentController,
+  listDepartmentsController,
   listUsersController,
+  updateDepartmentController,
   updateUserAccessController,
   updateUserStatusController,
 } = require('../controllers/admin.controller');
@@ -25,6 +29,11 @@ router.get('/users', requirePermissions(['user.read']), asyncHandler(listUsersCo
 router.post('/users', requirePermissions(['user.create', 'role.assign']), asyncHandler(createUserController));
 router.patch('/users/:userId/access', requirePermissions(['user.update']), asyncHandler(updateUserAccessController));
 router.patch('/users/:userId/status', requirePermissions(['user.suspend']), asyncHandler(updateUserStatusController));
+
+router.get('/departments', requirePermissions(['module.read']), asyncHandler(listDepartmentsController));
+router.post('/departments', requirePermissions(['module.assign']), asyncHandler(createDepartmentController));
+router.patch('/departments/:departmentId', requirePermissions(['module.assign']), asyncHandler(updateDepartmentController));
+router.delete('/departments/:departmentId', requirePermissions(['module.assign']), asyncHandler(deleteDepartmentController));
 
 router.get(
   '/super-admin/ping',

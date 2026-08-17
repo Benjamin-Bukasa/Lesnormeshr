@@ -4,6 +4,7 @@ import { Breadcrumbs, Card } from '../components/ui';
 
 const SETTINGS_TABS = [
   { label: 'Apparence', to: '/Settings/Appearance' },
+  { label: 'Départements', to: '/Settings/Departments' },
   { label: 'Utilisateurs et permissions', to: '/Settings/Users-Permissions' },
 ];
 

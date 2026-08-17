@@ -897,6 +897,7 @@ module.exports = {
   clearSessionCookie,
   createSession,
   createUser,
+  getAccessOptions,
   getCurrentAuthState,
   getSessionCookieValue,
   listUsers,

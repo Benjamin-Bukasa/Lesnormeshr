@@ -1,46 +1,74 @@
 import { create } from 'zustand';
+import {
+  clearCompletedWorkspaceTasks,
+  getWorkspaceSummary,
+  markWorkspaceMessagesRead,
+  markWorkspaceNotificationsRead,
+  updateWorkspaceTask,
+} from '../services/workspaceApi';
 
-const INITIAL_NOTIFICATIONS = [
-  { id: 'n1', title: 'Demande de conge en attente', message: '2 validations requises' },
-  { id: 'n2', title: 'Paie du mois prete', message: 'Le lot de paie est disponible' },
-];
+function isToday(value) {
+  if (!value) return false;
 
-const INITIAL_MESSAGES = [
-  { id: 'm1', title: 'Admin RH', message: 'Merci de verifier le dossier candidat.' },
-  { id: 'm2', title: 'Finance', message: 'Le rapport de paie est pret.' },
-];
+  const date = new Date(value);
+  const today = new Date();
 
-const INITIAL_TASKS = [
-  {
-    id: 'task_1',
-    label: 'Completer le questionnaire avant la session Leadership Track',
-    category: 'Developpement des employes',
-    date: 'Aujourd hui, 11:00',
-    done: false,
-    dueToday: true,
+  return date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate();
+}
+
+function formatTaskDate(value) {
+  if (!value) return 'Sans echeance';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sans echeance';
+
+  const time = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+
+  if (isToday(value)) return `Aujourd hui, ${time}`;
+
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function normalizeSummary(payload = {}) {
+  return {
+    tasks: (payload.tasks || []).map((task) => ({
+      ...task,
+      date: formatTaskDate(task.dueAt),
+      dueToday: isToday(task.dueAt),
+    })),
+    notifications: payload.notifications || [],
+    messages: payload.messages || [],
+  };
+}
+
+const useRealtimeStore = create((set, get) => ({
+  notifications: [],
+  messages: [],
+  tasks: [],
+  isLoading: false,
+  hasLoaded: false,
+  loadWorkspace: async () => {
+    if (get().isLoading) return;
+
+    try {
+      set({ isLoading: true });
+      const payload = await getWorkspaceSummary();
+      set({ ...normalizeSummary(payload), hasLoaded: true });
+    } finally {
+      set({ isLoading: false });
+    }
   },
-  {
-    id: 'task_2',
-    label: "Finaliser les retours du panel d'entretien pour le poste Produit",
-    category: 'Acquisition des talents',
-    date: 'Aujourd hui, 15:30',
-    done: false,
-    dueToday: true,
-  },
-  {
-    id: 'task_3',
-    label: 'Preparer la reunion hebdomadaire RH',
-    category: 'Operations RH',
-    date: 'Demain, 09:00',
-    done: false,
-    dueToday: false,
-  },
-];
-
-const useRealtimeStore = create((set) => ({
-  notifications: INITIAL_NOTIFICATIONS,
-  messages: INITIAL_MESSAGES,
-  tasks: INITIAL_TASKS,
   addNotification: (notification) => {
     set((state) => ({
       notifications: [notification, ...state.notifications],
@@ -51,23 +79,69 @@ const useRealtimeStore = create((set) => ({
       messages: [message, ...state.messages],
     }));
   },
-  toggleTaskDone: (taskId) => {
+  toggleTaskDone: async (taskId) => {
+    const currentTask = get().tasks.find((task) => task.id === taskId);
+    if (!currentTask) return;
+
+    const nextDone = !currentTask.done;
     set((state) => ({
       tasks: state.tasks.map((task) => (
-        task.id === taskId ? { ...task, done: !task.done } : task
+        task.id === taskId ? { ...task, done: nextDone } : task
       )),
     }));
+
+    try {
+      const updatedTask = await updateWorkspaceTask(taskId, nextDone);
+      set((state) => ({
+        tasks: state.tasks.map((task) => (
+          task.id === taskId
+            ? { ...task, ...updatedTask, date: formatTaskDate(updatedTask.dueAt), dueToday: isToday(updatedTask.dueAt) }
+            : task
+        )),
+      }));
+    } catch (error) {
+      set((state) => ({
+        tasks: state.tasks.map((task) => (
+          task.id === taskId ? { ...task, done: currentTask.done } : task
+        )),
+      }));
+      throw error;
+    }
   },
-  clearNotifications: () => {
+  clearNotifications: async () => {
+    const previousNotifications = get().notifications;
     set({ notifications: [] });
+
+    try {
+      await markWorkspaceNotificationsRead();
+    } catch (error) {
+      set({ notifications: previousNotifications });
+      throw error;
+    }
   },
-  clearMessages: () => {
+  clearMessages: async () => {
+    const previousMessages = get().messages;
     set({ messages: [] });
+
+    try {
+      await markWorkspaceMessagesRead();
+    } catch (error) {
+      set({ messages: previousMessages });
+      throw error;
+    }
   },
-  clearCompletedTasks: () => {
+  clearCompletedTasks: async () => {
+    const previousTasks = get().tasks;
     set((state) => ({
       tasks: state.tasks.filter((task) => !task.done),
     }));
+
+    try {
+      await clearCompletedWorkspaceTasks();
+    } catch (error) {
+      set({ tasks: previousTasks });
+      throw error;
+    }
   },
 }));
 
