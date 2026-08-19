@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { EllipsisVertical, KeyRound, Mail, ShieldCheck, UserCheck, UserPlus, UserRound, UserX } from 'lucide-react';
-import { Button, Card, DataTable, DropdownSelect, Input, Sheet, StatusBadge, useToast } from '../components/ui';
+import { EllipsisVertical, Eye, KeyRound, Mail, ShieldCheck, Trash2, UserCheck, UserPlus, UserRound, UserX } from 'lucide-react';
+import { Button, Card, ConfirmModal, DataTable, DropdownSelect, Input, Sheet, StatusBadge, useToast } from '../components/ui';
 import DropdownAction from '../components/ui/dropdownAction';
 import useAuthStore from '../stores/authStore';
 import {
   createAdminUser,
+  deleteAdminUser,
   getAccessOptions,
   listAdminUsers,
   updateAdminUserAccess,
@@ -48,7 +49,6 @@ const INITIAL_CREATE_FORM = {
   email: '',
   phone: '',
   roleCode: '',
-  preferredChannel: 'EMAIL',
   permissionCodes: [],
   moduleCodes: [],
 };
@@ -139,11 +139,21 @@ function SettingsUsersPermissions() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [isSubmittingAccess, setIsSubmittingAccess] = useState(false);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [detailUserId, setDetailUserId] = useState('');
+  const [temporaryPasswords, setTemporaryPasswords] = useState({});
+  const [userToDelete, setUserToDelete] = useState(null);
   const [createForm, setCreateForm] = useState(INITIAL_CREATE_FORM);
   const [accessForm, setAccessForm] = useState(INITIAL_ACCESS_FORM);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [isAccessSheetOpen, setIsAccessSheetOpen] = useState(false);
+  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+
+  const detailUser = useMemo(
+    () => users.find((user) => user.id === detailUserId) || null,
+    [users, detailUserId],
+  );
 
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId) || null,
@@ -310,6 +320,12 @@ function SettingsUsersPermissions() {
     setIsAccessSheetOpen(true);
   }
 
+  function openDetailSheet(userId) {
+    setSelectedUserId(userId);
+    setDetailUserId(userId);
+    setIsDetailSheetOpen(true);
+  }
+
   async function refreshUsers(targetPage = page) {
     const data = await listAdminUsers({ page: targetPage, limit: PAGE_SIZE });
     setUsers(data.users || []);
@@ -325,10 +341,15 @@ function SettingsUsersPermissions() {
       const result = await createAdminUser(createForm);
       toast.success(result.message || 'Utilisateur cree avec succes.');
 
-      if (result.temporaryPassword) {
-        toast.info(`Mot de passe temporaire: ${result.temporaryPassword}`, {
-          duration: 7000,
-        });
+      if (result.temporaryPassword && result.user?.id) {
+        setTemporaryPasswords((current) => ({
+          ...current,
+          [result.user.id]: result.temporaryPassword,
+        }));
+      }
+
+      if (!result.delivery?.sent) {
+        toast.error(`Utilisateur cree, mais l email d acces n a pas pu etre envoye${result.delivery?.reason ? ` : ${result.delivery.reason}` : '.'}`);
       }
 
       setCreateForm({
@@ -341,6 +362,8 @@ function SettingsUsersPermissions() {
       const nextUsers = await refreshUsers(1);
       if (result.user?.id) {
         setSelectedUserId(result.user.id);
+        setDetailUserId(result.user.id);
+        setIsDetailSheetOpen(true);
       } else {
         setSelectedUserId(nextUsers[0]?.id || '');
       }
@@ -382,6 +405,29 @@ function SettingsUsersPermissions() {
       await refreshUsers(page);
     } catch (error) {
       toast.error(error.message || 'Modification du statut impossible.');
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!userToDelete) return;
+
+    try {
+      setIsSubmittingDelete(true);
+      const result = await deleteAdminUser(userToDelete.id);
+      toast.success(result.message || 'Utilisateur supprime avec succes.');
+      setTemporaryPasswords((current) => {
+        const next = { ...current };
+        delete next[userToDelete.id];
+        return next;
+      });
+      setUserToDelete(null);
+      setIsDetailSheetOpen(false);
+      const nextUsers = await refreshUsers(page);
+      setSelectedUserId(nextUsers[0]?.id || '');
+    } catch (error) {
+      toast.error(error.message || 'Suppression utilisateur impossible.');
+    } finally {
+      setIsSubmittingDelete(false);
     }
   }
 
@@ -440,6 +486,12 @@ function SettingsUsersPermissions() {
                 buttonClassName="rounded-lg bg-transparent p-1 text-text-primary hover:bg-secondary/70"
                 items={[
                   {
+                    id: `detail_${row.id}`,
+                    label: 'Voir les details',
+                    icon: Eye,
+                    onClick: () => openDetailSheet(row.id),
+                  },
+                  {
                     id: `access_${row.id}`,
                     label: 'Gerer les acces',
                     icon: ShieldCheck,
@@ -451,6 +503,14 @@ function SettingsUsersPermissions() {
                     icon: row.status === 'SUSPENDED' ? UserCheck : UserX,
                     variant: row.status === 'SUSPENDED' ? undefined : 'danger',
                     onClick: () => handleToggleStatus(row),
+                  },
+                  {
+                    id: `delete_${row.id}`,
+                    label: 'Supprimer',
+                    icon: Trash2,
+                    variant: 'danger',
+                    disabled: row.id === authUser?.id,
+                    onClick: () => setUserToDelete(row),
                   },
                 ]}
               />
@@ -591,16 +651,9 @@ function SettingsUsersPermissions() {
               }))}
             />
 
-            <DropdownSelect
-              id="create-channel"
-              label="Canal prefere"
-              value={createForm.preferredChannel}
-              onChange={(nextValue) => setCreateForm((prev) => ({ ...prev, preferredChannel: nextValue }))}
-              options={[
-                { value: 'EMAIL', label: 'Email' },
-                { value: 'SMS', label: 'SMS' },
-              ]}
-            />
+            <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted">
+              Les acces seront envoyes par email. Le telephone reste une information de contact.
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -630,6 +683,65 @@ function SettingsUsersPermissions() {
           </div>
         </form>
       </Sheet>
+
+      <Sheet
+        open={isDetailSheetOpen}
+        onClose={() => setIsDetailSheetOpen(false)}
+        title="Details de l utilisateur"
+        description="Informations du compte et acces de connexion."
+        size="md"
+        footer={detailUser ? (
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="danger"
+              onClick={() => setUserToDelete(detailUser)}
+              disabled={detailUser.id === authUser?.id}
+            >
+              <Trash2 size={16} />
+              Supprimer
+            </Button>
+            <Button variant="secondary" onClick={() => setIsDetailSheetOpen(false)}>Fermer</Button>
+          </div>
+        ) : null}
+      >
+        {detailUser ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-base font-semibold text-text">{detailUser.firstName} {detailUser.lastName}</p>
+              <p className="mt-1 text-sm text-muted">{detailUser.email || detailUser.phone || '-'}</p>
+              <div className="mt-3"><StatusBadge status={detailUser.status} label={getStatusLabel(detailUser.status)} /></div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-background p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted">Role</p>
+                <p className="mt-2 text-sm font-medium text-text">{detailUser.access?.role?.name || detailUser.access?.role?.code || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted">Modules</p>
+                <p className="mt-2 text-sm font-medium text-text">{(detailUser.access?.modules || []).join(', ') || '-'}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Mot de passe temporaire</p>
+              {temporaryPasswords[detailUser.id] ? (
+                <p className="mt-2 break-all font-mono text-base font-semibold text-text">{temporaryPasswords[detailUser.id]}</p>
+              ) : (
+                <p className="mt-2 text-sm text-muted">Non disponible : le mot de passe n est jamais conserve en clair. Il est visible ici uniquement juste apres la creation du compte.</p>
+              )}
+            </div>
+          </div>
+        ) : <p className="text-sm text-muted">Utilisateur introuvable.</p>}
+      </Sheet>
+
+      <ConfirmModal
+        open={Boolean(userToDelete)}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={handleDeleteUser}
+        title="Supprimer cet utilisateur ?"
+        description={userToDelete ? `Le compte de ${userToDelete.firstName} ${userToDelete.lastName} sera supprime definitivement.` : ''}
+        confirmLabel="Supprimer"
+        loading={isSubmittingDelete}
+      />
 
       <Sheet
         open={isAccessSheetOpen}
