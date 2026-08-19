@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { EllipsisVertical, Eye, KeyRound, Mail, ShieldCheck, Trash2, UserCheck, UserPlus, UserRound, UserX } from 'lucide-react';
+import { EllipsisVertical, Eye, KeyRound, Mail, Pencil, ShieldCheck, Trash2, UserCheck, UserPlus, UserRound, UserX } from 'lucide-react';
 import { Button, Card, ConfirmModal, DataTable, DropdownSelect, Input, Sheet, StatusBadge, useToast } from '../components/ui';
 import DropdownAction from '../components/ui/dropdownAction';
 import useAuthStore from '../stores/authStore';
@@ -9,8 +9,11 @@ import {
   getAccessOptions,
   listAdminUsers,
   updateAdminUserAccess,
+  updateAdminUserProfile,
   updateAdminUserStatus,
+  uploadAdminUserAvatar,
 } from '../services/adminApi';
+import { resolveMediaUrl } from '../utils/media';
 
 const ADMIN_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -108,6 +111,10 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function toDateInput(value) {
+  return value ? new Date(value).toISOString().slice(0, 10) : '';
+}
+
 function getStatusLabel(status) {
   switch (String(status || '').toUpperCase()) {
     case 'INVITED':
@@ -140,15 +147,19 @@ function SettingsUsersPermissions() {
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [isSubmittingAccess, setIsSubmittingAccess] = useState(false);
   const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
+  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [detailUserId, setDetailUserId] = useState('');
   const [temporaryPasswords, setTemporaryPasswords] = useState({});
   const [userToDelete, setUserToDelete] = useState(null);
   const [createForm, setCreateForm] = useState(INITIAL_CREATE_FORM);
   const [accessForm, setAccessForm] = useState(INITIAL_ACCESS_FORM);
+  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '' });
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [isAccessSheetOpen, setIsAccessSheetOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+  const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
 
   const detailUser = useMemo(
     () => users.find((user) => user.id === detailUserId) || null,
@@ -326,6 +337,20 @@ function SettingsUsersPermissions() {
     setIsDetailSheetOpen(true);
   }
 
+  function openProfileSheet(userId) {
+    const user = users.find((item) => item.id === userId);
+    if (!user) return;
+    setSelectedUserId(userId);
+    setProfileForm({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      dateOfBirth: toDateInput(user.dateOfBirth),
+    });
+    setIsProfileSheetOpen(true);
+  }
+
   async function refreshUsers(targetPage = page) {
     const data = await listAdminUsers({ page: targetPage, limit: PAGE_SIZE });
     setUsers(data.users || []);
@@ -431,6 +456,38 @@ function SettingsUsersPermissions() {
     }
   }
 
+  async function handleSaveProfile(event) {
+    event.preventDefault();
+    if (!selectedUser) return;
+
+    try {
+      setIsSubmittingProfile(true);
+      const result = await updateAdminUserProfile(selectedUser.id, profileForm);
+      toast.success(result.message || 'Informations utilisateur mises a jour.');
+      await refreshUsers(page);
+      setIsProfileSheetOpen(false);
+    } catch (error) {
+      toast.error(error.message || 'Mise a jour des informations impossible.');
+    } finally {
+      setIsSubmittingProfile(false);
+    }
+  }
+
+  async function handleAvatarUpload(file) {
+    if (!file || !selectedUser) return;
+
+    try {
+      setIsUploadingAvatar(true);
+      const result = await uploadAdminUserAvatar(selectedUser.id, file);
+      toast.success(result.message || 'Photo de profil mise a jour.');
+      await refreshUsers(page);
+    } catch (error) {
+      toast.error(error.message || 'Mise a jour de la photo impossible.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Card
@@ -490,6 +547,12 @@ function SettingsUsersPermissions() {
                     label: 'Voir les details',
                     icon: Eye,
                     onClick: () => openDetailSheet(row.id),
+                  },
+                  {
+                    id: `profile_${row.id}`,
+                    label: 'Modifier les informations',
+                    icon: Pencil,
+                    onClick: () => openProfileSheet(row.id),
                   },
                   {
                     id: `access_${row.id}`,
@@ -685,13 +748,65 @@ function SettingsUsersPermissions() {
       </Sheet>
 
       <Sheet
+        open={isProfileSheetOpen}
+        onClose={() => setIsProfileSheetOpen(false)}
+        title="Modifier les informations"
+        description={selectedUser ? `Mettez a jour le profil de ${selectedUser.firstName} ${selectedUser.lastName}.` : ''}
+        size="lg"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIsProfileSheetOpen(false)} disabled={isSubmittingProfile}>Annuler</Button>
+            <Button type="submit" form="user-profile-form" disabled={isSubmittingProfile}>
+              {isSubmittingProfile ? 'Enregistrement...' : 'Enregistrer'}
+            </Button>
+          </div>
+        )}
+      >
+        {selectedUser ? (
+          <form id="user-profile-form" className="space-y-5" onSubmit={handleSaveProfile}>
+            <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-background p-4">
+              {selectedUser.avatarUrl ? (
+                <img src={resolveMediaUrl(selectedUser.avatarUrl)} alt="Photo de profil" className="h-16 w-16 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRound size={28} /></div>
+              )}
+              <div>
+                <p className="font-medium text-text">Photo de profil</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="mt-2 block text-sm text-muted"
+                  disabled={isUploadingAvatar}
+                  onChange={(event) => {
+                    handleAvatarUpload(event.target.files?.[0]);
+                    event.target.value = '';
+                  }}
+                />
+                {isUploadingAvatar ? <p className="mt-1 text-xs text-muted">Envoi de la photo...</p> : null}
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input id="edit-user-first-name" name="firstName" label="Prenom" value={profileForm.firstName} required onChange={(event) => setProfileForm((prev) => ({ ...prev, firstName: event.target.value }))} />
+              <Input id="edit-user-last-name" name="lastName" label="Nom" value={profileForm.lastName} required onChange={(event) => setProfileForm((prev) => ({ ...prev, lastName: event.target.value }))} />
+              <Input id="edit-user-email" name="email" type="email" label="Email" value={profileForm.email} onChange={(event) => setProfileForm((prev) => ({ ...prev, email: event.target.value }))} />
+              <Input id="edit-user-phone" name="phone" label="Telephone" value={profileForm.phone} onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))} />
+              <Input id="edit-user-date-of-birth" name="dateOfBirth" type="date" label="Date de naissance" value={profileForm.dateOfBirth} onChange={(event) => setProfileForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))} />
+            </div>
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted">
+              Les roles, permissions et modules se modifient via l action « Gerer les acces » de cet utilisateur.
+            </div>
+          </form>
+        ) : <p className="text-sm text-muted">Utilisateur introuvable.</p>}
+      </Sheet>
+
+      <Sheet
         open={isDetailSheetOpen}
         onClose={() => setIsDetailSheetOpen(false)}
         title="Details de l utilisateur"
         description="Informations du compte et acces de connexion."
         size="md"
         footer={detailUser ? (
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Button
               variant="danger"
               onClick={() => setUserToDelete(detailUser)}
@@ -700,7 +815,11 @@ function SettingsUsersPermissions() {
               <Trash2 size={16} />
               Supprimer
             </Button>
-            <Button variant="secondary" onClick={() => setIsDetailSheetOpen(false)}>Fermer</Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => openProfileSheet(detailUser.id)}><Pencil size={16} /> Modifier</Button>
+              <Button variant="secondary" onClick={() => openAccessSheet(detailUser.id)}><ShieldCheck size={16} /> Acces</Button>
+              <Button variant="secondary" onClick={() => setIsDetailSheetOpen(false)}>Fermer</Button>
+            </div>
           </div>
         ) : null}
       >
@@ -719,6 +838,10 @@ function SettingsUsersPermissions() {
               <div className="rounded-xl border border-border bg-background p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted">Modules</p>
                 <p className="mt-2 text-sm font-medium text-text">{(detailUser.access?.modules || []).join(', ') || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted">Date de naissance</p>
+                <p className="mt-2 text-sm font-medium text-text">{detailUser.dateOfBirth ? new Intl.DateTimeFormat('fr-FR').format(new Date(detailUser.dateOfBirth)) : '-'}</p>
               </div>
             </div>
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">

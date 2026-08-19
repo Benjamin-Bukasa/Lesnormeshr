@@ -335,6 +335,7 @@ model User {
   lastName                   String
   email                      String?                         @unique
   phone                      String?                         @unique
+  dateOfBirth                DateTime?
   avatarUrl                  String?
   passwordHash               String
   status                     UserStatus                      @default(INVITED)

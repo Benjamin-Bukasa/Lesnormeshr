@@ -30,6 +30,18 @@ function normalizePhone(phone) {
   return phone ? String(phone).trim() : null;
 }
 
+function normalizeDateOfBirth(value) {
+  if (value === undefined) return undefined;
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date > new Date()) {
+    throw new AppError(400, 'Date de naissance invalide.');
+  }
+
+  return date;
+}
+
 function resolveDeliveryChannel(user, preferredChannel) {
   const requested = preferredChannel ? String(preferredChannel).toUpperCase() : null;
 
@@ -461,6 +473,54 @@ async function updateCurrentProfileAvatar(userId, tenantId, file) {
     user: sanitizeUser(updatedUser),
     access: buildAccessPayload(updatedUser),
   };
+}
+
+async function updateUserProfile(userId, payload, actor) {
+  const firstName = payload.firstName !== undefined ? String(payload.firstName || '').trim() : undefined;
+  const lastName = payload.lastName !== undefined ? String(payload.lastName || '').trim() : undefined;
+  const email = payload.email !== undefined ? normalizeEmail(payload.email) : undefined;
+  const phone = payload.phone !== undefined ? normalizePhone(payload.phone) : undefined;
+  const dateOfBirth = normalizeDateOfBirth(payload.dateOfBirth);
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId: actor?.tenantId },
+    select: authUserProfileSelect,
+  });
+
+  if (!user) throw new AppError(404, 'Utilisateur introuvable.');
+  if (!firstName && payload.firstName !== undefined) throw new AppError(400, 'firstName est obligatoire.');
+  if (!lastName && payload.lastName !== undefined) throw new AppError(400, 'lastName est obligatoire.');
+  if (!(email !== undefined ? email : user.email) && !(phone !== undefined ? phone : user.phone)) {
+    throw new AppError(400, 'Un email ou un numero de telephone est obligatoire.');
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { firstName, lastName, email, phone, dateOfBirth },
+    select: authUserProfileSelect,
+  });
+
+  return { message: 'Informations utilisateur mises a jour.', user: sanitizeUser(updatedUser) };
+}
+
+async function updateUserAvatar(userId, file, actor) {
+  if (!file) throw new AppError(400, 'Fichier image requis.');
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId: actor?.tenantId },
+    select: authUserProfileSelect,
+  });
+  if (!user) throw new AppError(404, 'Utilisateur introuvable.');
+
+  const avatarUrl = `/uploads/profiles/${file.filename}`;
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { avatarUrl },
+    select: authUserProfileSelect,
+  });
+
+  if (user.avatarUrl && user.avatarUrl !== avatarUrl) removeStoredProfileAvatar(user.avatarUrl);
+  return { message: 'Photo de profil mise a jour.', user: sanitizeUser(updatedUser) };
 }
 
 async function requestPasswordReset(payload) {
@@ -974,6 +1034,8 @@ module.exports = {
   revokeCurrentSession,
   updateCurrentProfile,
   updateCurrentProfileAvatar,
+  updateUserAvatar,
+  updateUserProfile,
   updateUserAccess,
   updateUserStatus,
   changePassword,
