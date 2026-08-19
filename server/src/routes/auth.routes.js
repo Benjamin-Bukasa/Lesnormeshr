@@ -6,6 +6,8 @@ const { profileAvatarUpload } = require('../middleware/upload.middleware');
 const {
   changePasswordController,
   forgotPasswordController,
+  googleCallbackController,
+  googleLoginController,
   loginController,
   logoutController,
   meController,
@@ -19,6 +21,8 @@ const router = express.Router();
 
 router.post('/register', asyncHandler(registerController));
 router.post('/login', asyncHandler(loginController));
+router.get('/google', asyncHandler(googleLoginController));
+router.get('/google/callback', asyncHandler(googleCallbackController));
 router.post('/logout', requireAuth, asyncHandler(logoutController));
 router.get('/me', requireAuth, asyncHandler(meController));
 router.patch('/me', requireAuth, asyncHandler(updateMeController));

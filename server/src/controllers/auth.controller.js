@@ -1,11 +1,13 @@
 const {
   changePassword,
+  completeGoogleOAuth,
   getCurrentAuthState,
   login,
   register,
   requestPasswordReset,
   resetPassword,
   revokeCurrentSession,
+  startGoogleOAuth,
   updateCurrentProfile,
   updateCurrentProfileAvatar,
 } = require('../services/auth.service');
@@ -18,6 +20,15 @@ async function registerController(req, res) {
 async function loginController(req, res) {
   const result = await login(req, res, req.body);
   res.status(200).json(result);
+}
+
+async function googleLoginController(req, res) {
+  res.redirect(302, startGoogleOAuth(req, res));
+}
+
+async function googleCallbackController(req, res) {
+  const result = await completeGoogleOAuth(req, res, req.query);
+  res.redirect(302, result.redirectUrl);
 }
 
 async function logoutController(req, res) {
@@ -60,6 +71,8 @@ async function resetPasswordController(req, res) {
 module.exports = {
   changePasswordController,
   forgotPasswordController,
+  googleCallbackController,
+  googleLoginController,
   loginController,
   logoutController,
   meController,

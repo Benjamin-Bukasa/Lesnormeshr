@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const { DeliveryChannel, ResetPurpose, UserStatus } = require('@prisma/client');
 
@@ -146,6 +147,93 @@ function clearSessionCookie(res) {
     ...getCookieOptions(),
     maxAge: undefined,
   });
+}
+
+function getGoogleOAuthStateCookieOptions() {
+  return {
+    ...getCookieOptions(),
+    maxAge: 10 * 60 * 1000,
+  };
+}
+
+function requireGoogleOAuthConfig() {
+  if (!env.googleClientId || !env.googleClientSecret || !env.googleOauthRedirectUri) {
+    throw new AppError(503, 'La connexion Google n est pas encore configuree.');
+  }
+}
+
+function startGoogleOAuth(req, res) {
+  requireGoogleOAuthConfig();
+  const state = crypto.randomBytes(32).toString('hex');
+  res.cookie('google_oauth_state', state, getGoogleOAuthStateCookieOptions());
+
+  const query = new URLSearchParams({
+    client_id: env.googleClientId,
+    redirect_uri: env.googleOauthRedirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    prompt: 'select_account',
+  });
+
+  return `https://accounts.google.com/o/oauth2/v2/auth?${query.toString()}`;
+}
+
+function buildGoogleLoginRedirect(error = '') {
+  const baseUrl = env.appUrl || env.appOrigins[0] || 'http://localhost:5173';
+  const query = error ? `?google_error=${encodeURIComponent(error)}` : '?google=success';
+  return `${baseUrl.replace(/\/$/, '')}/Login${query}`;
+}
+
+async function completeGoogleOAuth(req, res, { code, state, error }) {
+  if (error) return { redirectUrl: buildGoogleLoginRedirect('Connexion Google annulee.') };
+
+  requireGoogleOAuthConfig();
+  const expectedState = req.cookies?.google_oauth_state;
+  res.clearCookie('google_oauth_state', { ...getGoogleOAuthStateCookieOptions(), maxAge: undefined });
+  if (!code || !state || !expectedState || state.length !== expectedState.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expectedState))) {
+    return { redirectUrl: buildGoogleLoginRedirect('La verification de securite Google a echoue.') };
+  }
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: env.googleClientId,
+      client_secret: env.googleClientSecret,
+      redirect_uri: env.googleOauthRedirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+  const tokens = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokens.access_token) return { redirectUrl: buildGoogleLoginRedirect('Google a refuse la connexion.') };
+
+  const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { authorization: `Bearer ${tokens.access_token}` },
+  });
+  const profile = await profileResponse.json().catch(() => ({}));
+  if (!profileResponse.ok || !profile.email || profile.email_verified !== true) {
+    return { redirectUrl: buildGoogleLoginRedirect('L email Google n a pas pu etre verifie.') };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: normalizeEmail(profile.email) },
+    select: loginUserSelect,
+  });
+  if (!user) return { redirectUrl: buildGoogleLoginRedirect('Aucun compte LesNormes RH ne correspond a cet email Google.') };
+  if ([UserStatus.SUSPENDED, UserStatus.ARCHIVED].includes(user.status)) {
+    return { redirectUrl: buildGoogleLoginRedirect('Ce compte ne peut pas se connecter.') };
+  }
+
+  const now = new Date();
+  const effectiveStatus = [UserStatus.INVITED, UserStatus.LOCKED].includes(user.status) ? UserStatus.ACTIVE : user.status;
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { failedLoginCount: 0, lockedUntil: null, status: effectiveStatus, firstLoginAt: user.firstLoginAt || now, lastLoginAt: now },
+  });
+  await createSession(req, res, user);
+  return { redirectUrl: buildGoogleLoginRedirect() };
 }
 
 async function revokeCurrentSession(req, res) {
@@ -1020,6 +1108,7 @@ async function getCurrentAuthState(userId, tenantId) {
 module.exports = {
   buildAccessPayload,
   clearSessionCookie,
+  completeGoogleOAuth,
   createSession,
   createUser,
   deleteUser,
@@ -1032,6 +1121,7 @@ module.exports = {
   requestPasswordReset,
   resetPassword,
   revokeCurrentSession,
+  startGoogleOAuth,
   updateCurrentProfile,
   updateCurrentProfileAvatar,
   updateUserAvatar,

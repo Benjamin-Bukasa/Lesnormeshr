@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Phone } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button, Input, useToast } from '../components/ui';
 import LoginRight from '../components/blocs/LoginRight';
-import { login as loginRequest } from '../services/authApi';
+import { getCurrentAuthProfile, login as loginRequest } from '../services/authApi';
 import useAuthStore from '../stores/authStore';
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const setUser = useAuthStore((state) => state.setUser);
 
@@ -17,8 +18,42 @@ function Login() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const isPhoneValue = /\d/.test(identifier) && !identifier.includes('@');
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const googleError = params.get('google_error');
+    if (googleError) {
+      toast.error(googleError);
+      navigate('/Login', { replace: true });
+      return;
+    }
+
+    if (params.get('google') !== 'success') return;
+    let cancelled = false;
+    getCurrentAuthProfile()
+      .then((result) => {
+        if (cancelled) return;
+        setUser(result.user, { storage: 'local' });
+        toast.success('Connexion Google reussie.');
+        navigate('/', { replace: true });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          toast.error(error.message || 'Connexion Google impossible.');
+          navigate('/Login', { replace: true });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [location.search, navigate, setUser, toast]);
+
+  const handleGoogleLogin = () => {
+    setIsGoogleLoading(true);
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    window.location.assign(`${apiBaseUrl}/api/auth/google`);
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -133,10 +168,12 @@ function Login() {
 
                 <button
                   type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isGoogleLoading}
                   className="inline-flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   <span className="text-lg font-semibold text-[#4285F4]">G</span>
-                  <span>Se connecter avec Google</span>
+                  <span>{isGoogleLoading ? 'Redirection vers Google...' : 'Se connecter avec Google'}</span>
                 </button>
               </form>
             </motion.div>

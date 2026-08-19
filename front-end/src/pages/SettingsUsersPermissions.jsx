@@ -374,6 +374,12 @@ function SettingsUsersPermissions() {
       }
 
       if (!result.delivery?.sent) {
+        // Le detail provient de Brevo via le backend et ne contient jamais la cle API.
+        console.error('[Brevo] Echec de l envoi des acces utilisateur', {
+          userId: result.user?.id,
+          recipient: result.user?.email || null,
+          delivery: result.delivery || null,
+        });
         toast.error(`Utilisateur cree, mais l email d acces n a pas pu etre envoye${result.delivery?.reason ? ` : ${result.delivery.reason}` : '.'}`);
       }
 
