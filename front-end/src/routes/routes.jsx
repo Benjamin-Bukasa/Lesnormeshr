@@ -38,6 +38,7 @@ const ResetPassword = lazy(() => import("../pages/ResetPassword"));
 const Profile = lazy(() => import("../pages/Profile"));
 const Settings = lazy(() => import("../pages/Settings"));
 const SettingsAppearance = lazy(() => import("../pages/SettingsAppearance"));
+const SettingsDepartments = lazy(() => import("../pages/SettingsDepartments"));
 const SettingsUsersPermissions = lazy(() => import("../pages/SettingsUsersPermissions"));
 const Notifications = lazy(() => import("../pages/Notifications"));
 const Messages = lazy(() => import("../pages/Messages"));
@@ -277,6 +278,10 @@ const routes = createBrowserRouter([
           {
             path: "Appearance",
             element: renderLazy(SettingsAppearance)
+          },
+          {
+            path: "Departments",
+            element: renderLazy(SettingsDepartments)
           },
           {
             path: "Users-Permissions",

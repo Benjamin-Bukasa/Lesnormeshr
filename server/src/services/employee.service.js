@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const {
   CompensationType,
   EmployeeLifecycleStatus,
@@ -11,6 +14,8 @@ const {
 const prisma = require('../lib/prisma');
 const AppError = require('../utils/app-error');
 const { buildPagination, parsePagination } = require('../utils/pagination');
+const { ensureEmployeeFolder } = require('../utils/employee-folders');
+const { employeeAvatarDirectory } = require('../middleware/upload.middleware');
 
 const DEPARTMENT_PRESETS = {
   rh: { code: 'rh', name: 'Ressources humaines' },
@@ -95,6 +100,12 @@ const employeeInclude = {
     },
   },
   payrollProfile: true,
+  _count: {
+    select: {
+      documents: true,
+      employmentEvents: true,
+    },
+  },
 };
 
 function normalizeText(value) {
@@ -179,6 +190,7 @@ function serializeEmployee(employee) {
     employeeNumber: employee.employeeNumber,
     firstName: employee.firstName,
     lastName: employee.lastName,
+    photoUrl: employee.photoUrl,
     preferredName: employee.preferredName,
     workEmail: employee.workEmail,
     workPhone: employee.workPhone,
@@ -215,6 +227,7 @@ function serializeEmployee(employee) {
           paymentMethod: employee.payrollProfile.paymentMethod,
         }
       : null,
+    documentCount: employee._count?.documents || 0,
     ui: {
       statusLabel: statusMeta.label,
       statusTone: statusMeta.tone,
@@ -226,6 +239,19 @@ function serializeEmployee(employee) {
     createdAt: employee.createdAt,
     updatedAt: employee.updatedAt,
   };
+}
+
+function removeStoredEmployeeAvatar(photoUrl) {
+  if (!photoUrl || !photoUrl.startsWith('/uploads/employees/avatars/')) {
+    return;
+  }
+
+  const filename = path.basename(photoUrl);
+  const absolutePath = path.join(employeeAvatarDirectory, filename);
+
+  if (fs.existsSync(absolutePath)) {
+    fs.unlinkSync(absolutePath);
+  }
 }
 
 async function ensureEmployeeBelongsToTenant(employeeId, tenantId) {
@@ -504,6 +530,8 @@ async function createEmployee(payload, context) {
     });
   });
 
+  ensureEmployeeFolder(employee.department?.code, employee.employeeNumber);
+
   return serializeEmployee(employee);
 }
 
@@ -537,7 +565,29 @@ async function updateEmployee(employeeId, payload, context) {
     });
   });
 
+  ensureEmployeeFolder(employee.department?.code, employee.employeeNumber);
+
   return serializeEmployee(employee);
+}
+
+async function uploadEmployeeAvatar(employeeId, tenantId, file) {
+  if (!file) {
+    throw new AppError(400, 'Fichier image requis.');
+  }
+
+  const employee = await ensureEmployeeBelongsToTenant(employeeId, tenantId);
+  const photoUrl = `/uploads/employees/avatars/${file.filename}`;
+  const updatedEmployee = await prisma.employee.update({
+    where: { id: employeeId },
+    data: { photoUrl },
+    include: employeeInclude,
+  });
+
+  if (employee.photoUrl && employee.photoUrl !== photoUrl) {
+    removeStoredEmployeeAvatar(employee.photoUrl);
+  }
+
+  return serializeEmployee(updatedEmployee);
 }
 
 async function updateEmployeeStatus(employeeId, status, context) {
@@ -572,6 +622,7 @@ module.exports = {
   deleteEmployee,
   getEmployeeById,
   listEmployees,
+  uploadEmployeeAvatar,
   updateEmployee,
   updateEmployeeStatus,
 };

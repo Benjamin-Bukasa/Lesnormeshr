@@ -8,6 +8,7 @@ const {
   addOnboardingTaskController,
   createApplicationController,
   createCandidateController,
+  deleteCandidateController,
   createJobPostingController,
   createOfferController,
   createOnboardingPlanController,
@@ -86,6 +87,7 @@ router.patch('/job-postings/:jobPostingId', requirePermissions(['talent.job.upda
 router.get('/candidates', requirePermissions(['talent.candidate.read']), asyncHandler(listCandidatesController));
 router.post('/candidates', requirePermissions(['talent.candidate.create']), asyncHandler(createCandidateController));
 router.patch('/candidates/:candidateId', requirePermissions(['talent.candidate.update']), asyncHandler(updateCandidateController));
+router.delete('/candidates/:candidateId', requirePermissions(['talent.candidate.update']), asyncHandler(deleteCandidateController));
 
 router.get('/applications', requirePermissions(['talent.application.read']), asyncHandler(listApplicationsController));
 router.post('/applications', requirePermissions(['talent.application.create']), asyncHandler(createApplicationController));

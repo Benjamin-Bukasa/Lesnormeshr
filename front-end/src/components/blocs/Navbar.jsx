@@ -110,6 +110,7 @@ const Navbar = () => {
   const clearNotifications = useRealtimeStore((state) => state.clearNotifications);
   const clearMessages = useRealtimeStore((state) => state.clearMessages);
   const toggleTaskDone = useRealtimeStore((state) => state.toggleTaskDone);
+  const loadWorkspace = useRealtimeStore((state) => state.loadWorkspace);
   const notifications = realtimeNotifications;
   const messages = realtimeMessages;
   const tasks = realtimeTasks;
@@ -154,6 +155,10 @@ const Navbar = () => {
   useEffect(() => {
     setSearchValue(searchParams.get('q') || '');
   }, [searchParams]);
+
+  useEffect(() => {
+    loadWorkspace().catch(() => null);
+  }, [loadWorkspace]);
 
   const globalSearchResults = useMemo(() => {
     if (normalizeSearchText(searchScope) !== 'tous') return [];
@@ -391,7 +396,7 @@ const Navbar = () => {
                           <input
                             type="checkbox"
                             checked={item.done}
-                            onChange={() => toggleTaskDone(item.id)}
+                            onChange={() => toggleTaskDone(item.id).catch(() => null)}
                             className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
                           />
                           <div className="min-w-0">
@@ -435,7 +440,7 @@ const Navbar = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      clearNotifications();
+                      clearNotifications().catch(() => null);
                       closeMenu();
                     }}
                     className="text-xs text-primary hover:underline"
@@ -492,7 +497,7 @@ const Navbar = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      clearMessages();
+                      clearMessages().catch(() => null);
                       closeMenu();
                     }}
                     className="text-xs text-primary hover:underline"

@@ -2,6 +2,7 @@ const {
   addOnboardingTask,
   createApplication,
   createCandidate,
+  deleteCandidate,
   createJobPosting,
   createOffer,
   createOnboardingPlan,
@@ -65,6 +66,11 @@ async function listCandidatesController(req, res) {
 async function createCandidateController(req, res) {
   const data = await createCandidate(req.body, req.auth.tenantId);
   res.status(201).json({ message: 'Candidat cree.', data });
+}
+
+async function deleteCandidateController(req, res) {
+  const data = await deleteCandidate(req.params.candidateId, req.auth.tenantId);
+  res.status(200).json({ message: 'Candidat supprime.', data });
 }
 
 async function updateCandidateController(req, res) {
@@ -168,6 +174,7 @@ module.exports = {
   addOnboardingTaskController,
   createApplicationController,
   createCandidateController,
+  deleteCandidateController,
   createJobPostingController,
   createOfferController,
   createOnboardingPlanController,

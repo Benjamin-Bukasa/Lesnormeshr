@@ -56,7 +56,12 @@ function DropdownSelect({
             aria-haspopup="listbox"
             aria-expanded={open}
           >
-            <span className={selectedOption ? 'text-text' : 'text-muted'}>
+            <span
+              className={[
+                'min-w-0 truncate whitespace-nowrap',
+                selectedOption ? 'text-text' : 'text-muted',
+              ].join(' ')}
+            >
               {selectedLabel}
             </span>
             <ChevronDown size={16} className="shrink-0 text-muted" />

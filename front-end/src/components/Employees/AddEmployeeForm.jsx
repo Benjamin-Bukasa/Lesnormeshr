@@ -4,8 +4,12 @@ import { ChevronDown, Download, Search, Upload } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button, Card, Input } from '../ui';
 import formatFrenchTypography from '../../utils/frenchTypography';
+import { resolveMediaUrl } from '../../utils/media';
+import { listDepartments } from '../../services/adminApi';
 
 export const DEFAULT_VALUES = {
+  photoUrl: '',
+  photoFile: null,
   employeeNumber: '',
   firstName: '',
   lastName: '',
@@ -69,7 +73,7 @@ const EMPLOYEE_STATUS_OPTIONS = [
   { value: 'ARCHIVED', label: 'Archive' },
 ];
 
-const DEPARTMENT_OPTIONS = [
+const STATIC_DEPARTMENT_OPTIONS = [
   { value: 'rh', label: 'Ressources humaines' },
   { value: 'finance', label: 'Finance' },
   { value: 'it', label: 'Informatique' },
@@ -326,7 +330,19 @@ const toText = (rawValue) => {
   return String(rawValue).trim();
 };
 
-const mapImportedRowToFormValues = (row) => {
+const mergeDepartmentOptions = (dynamicOptions = []) => {
+  const seen = new Set();
+  return [...STATIC_DEPARTMENT_OPTIONS, ...dynamicOptions].filter((option) => {
+    const key = String(option?.value || '').trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
+const mapImportedRowToFormValues = (row, departmentOptions = STATIC_DEPARTMENT_OPTIONS) => {
   const normalizedRow = Object.entries(row || {}).reduce((acc, [key, value]) => {
     acc[normalizeText(key)] = value;
     return acc;
@@ -365,7 +381,7 @@ const mapImportedRowToFormValues = (row) => {
     maritalStatus: resolveOptionValue(MARITAL_STATUS_OPTIONS, read('situation matrimoniale', 'marital status', 'maritalstatus')),
     employmentType: resolveOptionValue(EMPLOYMENT_TYPE_OPTIONS, read('type de contrat', 'employment type', 'employmenttype')),
     employeeStatus: resolveOptionValue(EMPLOYEE_STATUS_OPTIONS, read('statut employe', 'employee status', 'employeestatus')),
-    department: resolveOptionValue(DEPARTMENT_OPTIONS, read('departement', 'department')),
+    department: resolveOptionValue(departmentOptions, read('departement', 'department')),
     position: resolveOptionValue(POSITION_OPTIONS, read('poste', 'position')),
     location: resolveOptionValue(LOCATION_OPTIONS, read('site / localisation', 'site', 'location')),
     costCenter: resolveOptionValue(COST_CENTER_OPTIONS, read('centre de cout', 'cost center', 'costcenter')),
@@ -391,6 +407,7 @@ function AddEmployeeForm({
   const [isDragActive, setIsDragActive] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
+  const [departmentOptions, setDepartmentOptions] = useState(STATIC_DEPARTMENT_OPTIONS);
 
   const {
     register,
@@ -408,6 +425,34 @@ function AddEmployeeForm({
       ...(initialValues || {}),
     });
   }, [initialValues, reset]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDepartments() {
+      try {
+        const payload = await listDepartments();
+        const options = (payload.departments || []).map((department) => ({
+          value: department.code,
+          label: department.name,
+        }));
+
+        if (!cancelled && options.length) {
+          setDepartmentOptions(mergeDepartmentOptions(options));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDepartmentOptions(STATIC_DEPARTMENT_OPTIONS);
+        }
+      }
+    }
+
+    loadDepartments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleFormSubmit = async (values) => {
     if (onSubmitProp) {
@@ -464,7 +509,7 @@ function AddEmployeeForm({
         return;
       }
 
-      const mappedRows = rows.map(mapImportedRowToFormValues);
+      const mappedRows = rows.map((row) => mapImportedRowToFormValues(row, departmentOptions));
       reset({
         ...DEFAULT_VALUES,
         ...mappedRows[0],
@@ -545,6 +590,27 @@ function AddEmployeeForm({
       ) : null}
 
       <FormSection title="Identite et contact">
+          <div className="mb-3 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-background p-3">
+            {initialValues?.photoUrl ? (
+              <img
+                src={resolveMediaUrl(initialValues.photoUrl)}
+                alt={`${initialValues.firstName || ''} ${initialValues.lastName || ''}`.trim() || 'Photo de l employe'}
+                className="h-16 w-16 rounded-full object-cover"
+              />
+            ) : (
+              <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-lg font-semibold text-text-primary">
+                {`${initialValues?.firstName || ''}${initialValues?.lastName || ''}`.slice(0, 2).toUpperCase() || 'E'}
+              </span>
+            )}
+            <Input
+              className="min-w-[240px] flex-1"
+              label="Photo de l employe"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              hint="PNG, JPG ou WEBP, 2 Mo maximum."
+              {...register('photoFile')}
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Input
               label="Matricule"
@@ -715,7 +781,7 @@ function AddEmployeeForm({
                 <SearchDropdownInput
                   label="Departement"
                   required
-                  options={DEPARTMENT_OPTIONS}
+                  options={departmentOptions}
                   value={field.value}
                   onChange={field.onChange}
                   error={fieldState.error?.message}

@@ -132,16 +132,16 @@ async function ensureSuperAdmin() {
       });
 
       console.log('Utilisateur existant promu en super admin.');
-      return;
+      return prisma.user.findUnique({ where: { id: existingUser.id } });
     }
 
     console.log('Le super admin existe deja.');
-    return;
+    return existingUser;
   }
 
   const password = env.superAdminPassword || 'ChangeMe123!';
 
-  await prisma.user.create({
+  const createdUser = await prisma.user.create({
     data: {
       firstName: 'Super',
       lastName: 'Admin',
@@ -159,6 +159,102 @@ async function ensureSuperAdmin() {
   });
 
   console.log(`Super admin cree: ${env.superAdminEmail || env.superAdminPhone}`);
+  return createdUser;
+}
+
+async function ensureWorkspaceSeedData(user) {
+  if (!user) return;
+
+  const [taskCount, notificationCount, messageCount] = await Promise.all([
+    prisma.workspaceTask.count({ where: { tenantId: user.tenantId, assigneeId: user.id } }),
+    prisma.userNotification.count({ where: { tenantId: user.tenantId, userId: user.id } }),
+    prisma.userMessage.count({ where: { tenantId: user.tenantId, recipientId: user.id } }),
+  ]);
+
+  const today = new Date();
+  const todayAt = (hour) => {
+    const date = new Date(today);
+    date.setHours(hour, 0, 0, 0);
+    return date;
+  };
+  const tomorrowAt = (hour) => {
+    const date = todayAt(hour);
+    date.setDate(date.getDate() + 1);
+    return date;
+  };
+
+  if (taskCount === 0) {
+    await prisma.workspaceTask.createMany({
+      data: [
+        {
+          tenantId: user.tenantId,
+          assigneeId: user.id,
+          createdById: user.id,
+          title: 'Completer le questionnaire avant la session Leadership Track',
+          category: 'Developpement des employes',
+          dueAt: todayAt(11),
+        },
+        {
+          tenantId: user.tenantId,
+          assigneeId: user.id,
+          createdById: user.id,
+          title: "Finaliser les retours du panel d'entretien pour le poste Produit",
+          category: 'Acquisition des talents',
+          dueAt: todayAt(15),
+        },
+        {
+          tenantId: user.tenantId,
+          assigneeId: user.id,
+          createdById: user.id,
+          title: 'Preparer la reunion hebdomadaire RH',
+          category: 'Operations RH',
+          dueAt: tomorrowAt(9),
+        },
+      ],
+    });
+  }
+
+  if (notificationCount === 0) {
+    await prisma.userNotification.createMany({
+      data: [
+        {
+          tenantId: user.tenantId,
+          userId: user.id,
+          type: 'LEAVE_REQUEST',
+          title: 'Demande de conge en attente',
+          message: '2 validations requises',
+        },
+        {
+          tenantId: user.tenantId,
+          userId: user.id,
+          type: 'PAYROLL_READY',
+          title: 'Paie du mois prete',
+          message: 'Le lot de paie est disponible',
+        },
+      ],
+    });
+  }
+
+  if (messageCount === 0) {
+    await prisma.userMessage.createMany({
+      data: [
+        {
+          tenantId: user.tenantId,
+          senderId: user.id,
+          recipientId: user.id,
+          title: 'Admin RH',
+          message: 'Merci de verifier le dossier candidat.',
+        },
+        {
+          tenantId: user.tenantId,
+          senderId: user.id,
+          recipientId: user.id,
+          title: 'Finance',
+          message: 'Le rapport de paie est pret.',
+        },
+      ],
+    });
+  }
 }
 
 async function main() {
@@ -166,7 +262,8 @@ async function main() {
   await upsertModules();
   await upsertPermissions();
   await upsertRoles();
-  await ensureSuperAdmin();
+  const superAdmin = await ensureSuperAdmin();
+  await ensureWorkspaceSeedData(superAdmin);
 
   console.log('Seed Prisma termine.');
 }

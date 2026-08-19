@@ -35,7 +35,7 @@ function Tasks() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={clearCompletedTasks}
+            onClick={() => clearCompletedTasks().catch(() => null)}
             disabled={!tasks.some((task) => task.done)}
           >
             Nettoyer les tâches terminées
