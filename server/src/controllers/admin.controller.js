@@ -6,6 +6,8 @@ const {
   getAccessOptions,
   listUsers,
   updateUserAccess,
+  updateUserAvatar,
+  updateUserProfile,
   updateUserStatus,
 } = require('../services/auth.service');
 const {
@@ -80,6 +82,22 @@ async function updateUserAccessController(req, res) {
   res.status(200).json(result);
 }
 
+async function updateUserProfileController(req, res) {
+  const result = await updateUserProfile(req.params.userId, req.body, {
+    id: req.auth.user.id,
+    tenantId: req.auth.tenantId,
+  });
+  res.status(200).json(result);
+}
+
+async function updateUserAvatarController(req, res) {
+  const result = await updateUserAvatar(req.params.userId, req.file, {
+    id: req.auth.user.id,
+    tenantId: req.auth.tenantId,
+  });
+  res.status(200).json(result);
+}
+
 async function updateUserStatusController(req, res) {
   const normalizedStatus = String(req.body.status || '').toUpperCase();
   const status = UserStatus[normalizedStatus];
@@ -100,5 +118,7 @@ module.exports = {
   listUsersController,
   updateDepartmentController,
   updateUserAccessController,
+  updateUserAvatarController,
+  updateUserProfileController,
   updateUserStatusController,
 };

@@ -66,6 +66,27 @@ export async function deleteAdminUser(userId) {
   });
 }
 
+export async function updateAdminUserProfile(userId, body) {
+  return apiRequest(`/api/admin/users/${userId}`, {
+    method: 'PATCH',
+    body,
+  });
+}
+
+export async function uploadAdminUserAvatar(userId, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/avatar`, {
+    method: 'PATCH',
+    credentials: 'include',
+    body: formData,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || 'Erreur API');
+  return payload;
+}
+
 export async function updateAdminUserAccess(userId, body) {
   return apiRequest(`/api/admin/users/${userId}/access`, {
     method: 'PATCH',

@@ -1,6 +1,7 @@
 const express = require('express');
 
 const asyncHandler = require('../utils/async-handler');
+const { profileAvatarUpload } = require('../middleware/upload.middleware');
 const { ensurePasswordChanged, requireAuth } = require('../middleware/auth.middleware');
 const { requirePermissions, requireRoles } = require('../middleware/rbac.middleware');
 const {
@@ -13,6 +14,8 @@ const {
   listUsersController,
   updateDepartmentController,
   updateUserAccessController,
+  updateUserAvatarController,
+  updateUserProfileController,
   updateUserStatusController,
 } = require('../controllers/admin.controller');
 
@@ -29,6 +32,8 @@ router.get(
 router.get('/users', requirePermissions(['user.read']), asyncHandler(listUsersController));
 router.post('/users', requirePermissions(['user.create', 'role.assign']), asyncHandler(createUserController));
 router.delete('/users/:userId', requirePermissions(['user.update']), asyncHandler(deleteUserController));
+router.patch('/users/:userId', requirePermissions(['user.update']), asyncHandler(updateUserProfileController));
+router.patch('/users/:userId/avatar', requirePermissions(['user.update']), profileAvatarUpload.single('file'), asyncHandler(updateUserAvatarController));
 router.patch('/users/:userId/access', requirePermissions(['user.update']), asyncHandler(updateUserAccessController));
 router.patch('/users/:userId/status', requirePermissions(['user.suspend']), asyncHandler(updateUserStatusController));
 
