@@ -13,10 +13,11 @@ const {
   listEmployeesController,
   updateEmployeeController,
   updateEmployeeStatusController,
+  uploadEmployeeAvatarController,
   uploadEmployeeDocumentController,
   verifyEmployeeDocumentController,
 } = require('../controllers/employee.controller');
-const { employeeDocumentUpload } = require('../middleware/upload.middleware');
+const { employeeAvatarUpload, employeeDocumentUpload } = require('../middleware/upload.middleware');
 
 const router = express.Router();
 
@@ -33,6 +34,7 @@ router.get('/:employeeId', requirePermissions(['user.read']), asyncHandler(getEm
 router.post('/', requirePermissions(['user.create']), asyncHandler(createEmployeeController));
 router.patch('/:employeeId', requirePermissions(['user.update']), asyncHandler(updateEmployeeController));
 router.patch('/:employeeId/status', requirePermissions(['user.suspend']), asyncHandler(updateEmployeeStatusController));
+router.patch('/:employeeId/avatar', requirePermissions(['user.update']), employeeAvatarUpload.single('file'), asyncHandler(uploadEmployeeAvatarController));
 router.delete('/:employeeId', requirePermissions(['user.update']), asyncHandler(deleteEmployeeController));
 
 module.exports = router;

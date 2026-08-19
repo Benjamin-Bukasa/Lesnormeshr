@@ -6,10 +6,12 @@ const multer = require('multer');
 const talentUploadDirectory = path.join(__dirname, '..', '..', 'uploads', 'talent');
 const profileUploadDirectory = path.join(__dirname, '..', '..', 'uploads', 'profiles');
 const employeeUploadDirectory = path.join(__dirname, '..', '..', 'uploads', 'employees');
+const employeeAvatarDirectory = path.join(employeeUploadDirectory, 'avatars');
 
 fs.mkdirSync(talentUploadDirectory, { recursive: true });
 fs.mkdirSync(profileUploadDirectory, { recursive: true });
 fs.mkdirSync(employeeUploadDirectory, { recursive: true });
+fs.mkdirSync(employeeAvatarDirectory, { recursive: true });
 
 function sanitizeFilename(value) {
   return String(value || 'file')
@@ -63,8 +65,18 @@ const profileAvatarUpload = multer({
   },
 });
 
+const employeeAvatarUpload = multer({
+  storage: createStorage(employeeAvatarDirectory),
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 2 * 1024 * 1024,
+  },
+});
+
 module.exports = {
   employeeDocumentUpload,
+  employeeAvatarDirectory,
+  employeeAvatarUpload,
   employeeUploadDirectory,
   profileAvatarUpload,
   profileUploadDirectory,

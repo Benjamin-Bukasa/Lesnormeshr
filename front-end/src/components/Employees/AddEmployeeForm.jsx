@@ -4,9 +4,12 @@ import { ChevronDown, Download, Search, Upload } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button, Card, Input } from '../ui';
 import formatFrenchTypography from '../../utils/frenchTypography';
+import { resolveMediaUrl } from '../../utils/media';
 import { listDepartments } from '../../services/adminApi';
 
 export const DEFAULT_VALUES = {
+  photoUrl: '',
+  photoFile: null,
   employeeNumber: '',
   firstName: '',
   lastName: '',
@@ -587,6 +590,27 @@ function AddEmployeeForm({
       ) : null}
 
       <FormSection title="Identite et contact">
+          <div className="mb-3 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-background p-3">
+            {initialValues?.photoUrl ? (
+              <img
+                src={resolveMediaUrl(initialValues.photoUrl)}
+                alt={`${initialValues.firstName || ''} ${initialValues.lastName || ''}`.trim() || 'Photo de l employe'}
+                className="h-16 w-16 rounded-full object-cover"
+              />
+            ) : (
+              <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-lg font-semibold text-text-primary">
+                {`${initialValues?.firstName || ''}${initialValues?.lastName || ''}`.slice(0, 2).toUpperCase() || 'E'}
+              </span>
+            )}
+            <Input
+              className="min-w-[240px] flex-1"
+              label="Photo de l employe"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              hint="PNG, JPG ou WEBP, 2 Mo maximum."
+              {...register('photoFile')}
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Input
               label="Matricule"

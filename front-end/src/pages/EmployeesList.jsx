@@ -9,7 +9,9 @@ import {
   mapEmployeeToFormValues,
   updateEmployee,
   updateEmployeeStatus,
+  uploadEmployeeAvatar,
 } from '../services/employeesApi';
+import { resolveMediaUrl } from '../utils/media';
 
 const normalizeText = (value = '') =>
   String(value)
@@ -322,7 +324,11 @@ function EmployeesList() {
 
   const handleEmployeeUpdate = async (values) => {
     try {
-      const updatedRow = await updateEmployee(editingEmployeeId, values);
+      const savedRow = await updateEmployee(editingEmployeeId, values);
+      const photoFile = values.photoFile?.[0];
+      const updatedRow = photoFile
+        ? await uploadEmployeeAvatar(editingEmployeeId, photoFile)
+        : savedRow;
       setRows((previousRows) =>
         previousRows.map((employee) => (employee.id === editingEmployeeId ? updatedRow : employee)),
       );
@@ -337,13 +343,27 @@ function EmployeesList() {
   const columns = useMemo(
     () => [
       {
+        header: 'Avatar',
+        accessor: 'photoUrl',
+        render: (row) => (
+          row.photoUrl ? (
+            <img
+              src={resolveMediaUrl(row.photoUrl)}
+              alt={`${row.firstName} ${row.lastName}`}
+              className="h-9 w-9 rounded-full object-cover"
+            />
+          ) : (
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-text-primary">
+              {makeInitials(row.firstName, row.lastName)}
+            </span>
+          )
+        ),
+      },
+      {
         header: 'Employe',
         accessor: 'fullName',
         render: (row) => (
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-text-primary">
-              {makeInitials(row.firstName, row.lastName)}
-            </span>
             <div className="min-w-0">
               <p className="truncate font-medium">{`${row.firstName} ${row.lastName}`}</p>
               <p className="truncate text-xs text-text-secondary">{row.employeeNumber}</p>

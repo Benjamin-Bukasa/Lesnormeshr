@@ -48,6 +48,7 @@ function mapEmployeeToRow(employee) {
     employeeNumber: employee.employeeNumber,
     firstName: employee.firstName,
     lastName: employee.lastName,
+    photoUrl: employee.photoUrl || '',
     email: employee.workEmail || '',
     departmentId: employee.department?.id || '',
     department: employee.department?.name || '',
@@ -63,6 +64,7 @@ function mapEmployeeToRow(employee) {
 
 export function mapEmployeeToFormValues(employee) {
   return {
+    photoUrl: employee.photoUrl || '',
     employeeNumber: employee.employeeNumber || '',
     firstName: employee.firstName || '',
     lastName: employee.lastName || '',
@@ -158,6 +160,24 @@ export async function updateEmployee(employeeId, values) {
     method: 'PATCH',
     body: mapFormValuesToPayload(values),
   });
+
+  return mapEmployeeToRow(payload.data);
+}
+
+export async function uploadEmployeeAvatar(employeeId, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/avatar`, {
+    method: 'PATCH',
+    credentials: 'include',
+    body: formData,
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.message || 'Impossible de televerser la photo de l employe.');
+  }
 
   return mapEmployeeToRow(payload.data);
 }

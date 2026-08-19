@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import { Button, Card, Sheet, useToast } from '../components/ui';
 import AddEmployeeForm from '../components/Employees/AddEmployeeForm';
-import { createEmployee } from '../services/employeesApi';
+import { createEmployee, uploadEmployeeAvatar } from '../services/employeesApi';
 
 function EmployeesCreate() {
   const toast = useToast();
@@ -10,7 +10,11 @@ function EmployeesCreate() {
 
   const handleCreateEmployee = async (values) => {
     try {
-      const employee = await createEmployee(values);
+      const createdEmployee = await createEmployee(values);
+      const photoFile = values.photoFile?.[0];
+      const employee = photoFile
+        ? await uploadEmployeeAvatar(createdEmployee.id, photoFile)
+        : createdEmployee;
       toast.success(`Employe cree : ${employee.employeeNumber}.`);
       setIsCreateSheetOpen(false);
     } catch (error) {

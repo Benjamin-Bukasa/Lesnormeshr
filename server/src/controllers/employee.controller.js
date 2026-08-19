@@ -3,6 +3,7 @@ const {
   deleteEmployee,
   getEmployeeById,
   listEmployees,
+  uploadEmployeeAvatar,
   updateEmployee,
   updateEmployeeStatus,
 } = require('../services/employee.service');
@@ -75,6 +76,11 @@ async function updateEmployeeStatusController(req, res) {
   res.status(200).json({ data: result });
 }
 
+async function uploadEmployeeAvatarController(req, res) {
+  const result = await uploadEmployeeAvatar(req.params.employeeId, req.auth.tenantId, req.file);
+  res.status(200).json({ data: result });
+}
+
 async function deleteEmployeeController(req, res) {
   await deleteEmployee(req.params.employeeId, {
     tenantId: req.auth.tenantId,
@@ -118,6 +124,7 @@ module.exports = {
   listEmployeesController,
   updateEmployeeController,
   updateEmployeeStatusController,
+  uploadEmployeeAvatarController,
   uploadEmployeeDocumentController,
   verifyEmployeeDocumentController,
 };
