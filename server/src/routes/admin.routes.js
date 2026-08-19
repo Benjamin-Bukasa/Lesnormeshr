@@ -7,6 +7,7 @@ const {
   accessOptionsController,
   createDepartmentController,
   createUserController,
+  deleteUserController,
   deleteDepartmentController,
   listDepartmentsController,
   listUsersController,
@@ -27,6 +28,7 @@ router.get(
 
 router.get('/users', requirePermissions(['user.read']), asyncHandler(listUsersController));
 router.post('/users', requirePermissions(['user.create', 'role.assign']), asyncHandler(createUserController));
+router.delete('/users/:userId', requirePermissions(['user.update']), asyncHandler(deleteUserController));
 router.patch('/users/:userId/access', requirePermissions(['user.update']), asyncHandler(updateUserAccessController));
 router.patch('/users/:userId/status', requirePermissions(['user.suspend']), asyncHandler(updateUserStatusController));
 

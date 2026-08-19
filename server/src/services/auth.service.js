@@ -667,7 +667,11 @@ async function createUser(payload, actor) {
     select: authUserProfileSelect,
   });
 
-  const deliveryChannel = resolveDeliveryChannel(createdUser, preferredChannel);
+  // Les identifiants doivent parvenir par email dès qu'une adresse est disponible.
+  // Le SMS reste un repli uniquement pour les comptes sans email.
+  const deliveryChannel = createdUser.email
+    ? DeliveryChannel.EMAIL
+    : resolveDeliveryChannel(createdUser, preferredChannel);
   const deliveryResult = await sendTemporaryPassword({
     user: createdUser,
     temporaryPassword,
@@ -681,7 +685,68 @@ async function createUser(payload, actor) {
       ...deliveryResult,
     },
     user: sanitizeUser(createdUser),
-    ...getDebugSecretPayload('temporaryPassword', temporaryPassword),
+    // Secret a usage unique: renvoye uniquement dans la reponse de creation,
+    // jamais stocke en clair en base de donnees.
+    temporaryPassword,
+  };
+}
+
+async function deleteUser(userId, actor) {
+  if (!actor?.tenantId) {
+    throw new AppError(400, 'Tenant de l utilisateur connecte introuvable.');
+  }
+
+  if (userId === actor.id) {
+    throw new AppError(400, 'Vous ne pouvez pas supprimer votre propre compte.');
+  }
+
+  const targetUser = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      tenantId: actor.tenantId,
+    },
+    select: {
+      id: true,
+      role: {
+        select: { code: true },
+      },
+    },
+  });
+
+  if (!targetUser) {
+    throw new AppError(404, 'Utilisateur introuvable.');
+  }
+
+  if (targetUser.role.code === 'SUPER_ADMIN') {
+    if (actor?.role?.code !== 'SUPER_ADMIN') {
+      throw new AppError(403, 'Seul un super admin peut supprimer un super admin.');
+    }
+
+    const superAdminCount = await prisma.user.count({
+      where: {
+        tenantId: actor.tenantId,
+        role: { code: 'SUPER_ADMIN' },
+      },
+    });
+
+    if (superAdminCount <= 1) {
+      throw new AppError(409, 'Le dernier super admin du tenant ne peut pas etre supprime.');
+    }
+  }
+
+  try {
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+  } catch (error) {
+    if (error?.code === 'P2003') {
+      throw new AppError(409, 'Cet utilisateur possede deja des donnees metier. Suspendez ou archivez plutot son compte.');
+    }
+    throw error;
+  }
+
+  return {
+    message: 'Utilisateur supprime avec succes.',
   };
 }
 
@@ -897,6 +962,7 @@ module.exports = {
   clearSessionCookie,
   createSession,
   createUser,
+  deleteUser,
   getAccessOptions,
   getCurrentAuthState,
   getSessionCookieValue,

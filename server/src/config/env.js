@@ -36,6 +36,7 @@ const env = {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
+  appUrl: process.env.APP_URL || '',
   trustProxy: parseBoolean(process.env.TRUST_PROXY, false),
   cookieName: process.env.SESSION_COOKIE_NAME || 'lesnormes_session',
   sessionIdleTimeoutMinutes: parseNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60),

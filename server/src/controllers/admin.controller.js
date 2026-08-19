@@ -2,6 +2,7 @@ const { UserStatus } = require('@prisma/client');
 
 const {
   createUser,
+  deleteUser,
   getAccessOptions,
   listUsers,
   updateUserAccess,
@@ -31,6 +32,16 @@ async function listUsersController(req, res) {
     tenantId: req.auth.tenantId,
   });
   res.status(200).json({ users: result.items, pagination: result.pagination });
+}
+
+async function deleteUserController(req, res) {
+  const result = await deleteUser(req.params.userId, {
+    id: req.auth.user.id,
+    tenantId: req.auth.tenantId,
+    role: req.auth.access.role,
+  });
+
+  res.status(200).json(result);
 }
 
 async function accessOptionsController(req, res) {
@@ -83,6 +94,7 @@ module.exports = {
   accessOptionsController,
   createDepartmentController,
   createUserController,
+  deleteUserController,
   deleteDepartmentController,
   listDepartmentsController,
   listUsersController,

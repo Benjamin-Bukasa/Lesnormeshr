@@ -60,6 +60,12 @@ export async function createAdminUser(body) {
   });
 }
 
+export async function deleteAdminUser(userId) {
+  return apiRequest(`/api/admin/users/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function updateAdminUserAccess(userId, body) {
   return apiRequest(`/api/admin/users/${userId}/access`, {
     method: 'PATCH',
